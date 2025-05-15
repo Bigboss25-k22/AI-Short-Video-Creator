@@ -12,10 +12,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # Đọc biến môi trường từ .env nếu cần
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 # Lấy metadata từ core.database
-from app.core.database import metadata
+from app.core.database import Base
+
+from app.models import user, token
 
 # Lấy DATABASE_URL từ biến môi trường
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -29,7 +31,7 @@ if DATABASE_URL:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = metadata
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

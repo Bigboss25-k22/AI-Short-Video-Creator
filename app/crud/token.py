@@ -1,4 +1,4 @@
-from models.token import RefreshToken
+from app.models.token import RefreshToken
 from sqlalchemy.orm import Session
 from datetime import datetime
 
