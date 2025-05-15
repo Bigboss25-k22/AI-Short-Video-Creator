@@ -5,14 +5,15 @@ class UserBase(BaseModel):
     username: str
     email: str
     full_name: str | None = None
+    role: str = "user"
 
 
 class UserCreate(UserBase):
-    pass
+    password: str
 
 
 class User(UserBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -1,0 +1,9 @@
+# This file is used to install the required packages for the FastAPI application.
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+SQLAlchemy==2.0.30
+pydantic==2.7.1
+python-dotenv==1.0.1
+asyncpg==0.27.0
+databases==0.8.0
+psycopg2-binary==2.9.9
