@@ -2,13 +2,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
-from models.user import User
-from schemas.auth import TokenResponse, RefreshTokenRequest
-from core.auth import create_access_token, create_refresh_token, decode_token
-from core.database import get_db
-from crud.token import save_refresh_token, delete_refresh_token, get_refresh_token
+from app.models.user import User
+from app.schemas.auth import TokenResponse, RefreshTokenRequest
+from app.core.auth import create_access_token, create_refresh_token, decode_token
+from app.core.database import get_db
+from app.crud.token import save_refresh_token, delete_refresh_token, get_refresh_token
 from datetime import datetime, timedelta
+from passlib.context import CryptContext
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -17,7 +19,7 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
     user = db.query(User).filter_by(username=form_data.username).first()
-    if not user or not form_data.password == "test":  # Thay bằng verify_password
+    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Sai thông tin đăng nhập")
 
     access_token = create_access_token({"sub": user.username, "role": user.role})
