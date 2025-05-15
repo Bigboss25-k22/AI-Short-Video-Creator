@@ -1,0 +1,12 @@
+# Bỏ qua venv
+venv/
+# Bỏ qua file môi trường
+.env
+# Bỏ qua các file hệ thống, cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.DS_Store
+*.log
