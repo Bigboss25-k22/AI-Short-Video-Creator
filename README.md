@@ -1,3 +1,4 @@
+
 # Video Script Generator API
 
 This API generates video scripts using OpenAI's GPT-4 model based on user prompts.
@@ -75,3 +76,6 @@ console.log(data.script);
 The API returns appropriate error messages with status codes:
 - 400: Bad Request (missing prompt)
 - 500: Internal Server Error (OpenAI API issues) 
+
+
+
