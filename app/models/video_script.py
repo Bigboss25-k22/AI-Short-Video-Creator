@@ -16,7 +16,7 @@ class VideoScript(Base):
     __tablename__ = "video_scripts"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    creator_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    creator_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(255), nullable=False)
     description = Column(Text)
     target_audience = Column(String(255))

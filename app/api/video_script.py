@@ -15,7 +15,7 @@ deepseek_service = DeepSeekService()
 
 class TextToSpeechRequest(BaseModel):
     text: str
-    voice_id: str = "female"
+    voice_id: str = "vi-VN-Wavenet-A"  # Vietnamese female voice
     speed: float = 1.0
 
 @router.post("/generate", response_model=VideoScript)
@@ -24,15 +24,15 @@ async def generate_video_script(request: CreateScriptRequest, db: Session = Depe
     Tạo kịch bản video tự động dựa trên chủ đề, đối tượng mục tiêu và thời lượng
     """
     try:
-        # Tạo script trong database
-        db_script = crud.create_script(db, request)
-        
         # Tạo nội dung script bằng DeepSeek
         script = deepseek_service.generate_video_script(
             topic=request.topic,
             target_audience=request.target_audience,
             duration=request.duration
         )
+        
+        # Tạo script trong database với creator_id là null
+        db_script = crud.create_script(db, request)
         
         # Cập nhật thông tin script trong database
         crud.update_script(db, db_script.id, {
@@ -51,7 +51,9 @@ async def generate_video_script(request: CreateScriptRequest, db: Session = Depe
                 "voice_over": scene.voice_over
             })
         
-        return script
+        # Lấy script đã lưu từ database để trả về
+        saved_script = crud.get_script(db, db_script.id)
+        return saved_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

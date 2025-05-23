@@ -68,8 +68,14 @@ class GoogleTTSService:
             synthesis_input = texttospeech.SynthesisInput(text=text)
 
             # Cấu hình voice
+            # Tách voice_id thành các phần và xử lý an toàn
+            voice_parts = voice_id.split("-")
+            if len(voice_parts) < 2:
+                raise ValueError(f"Invalid voice_id format: {voice_id}. Expected format: language-region-voice-type")
+            
+            language_code = f"{voice_parts[0]}-{voice_parts[1]}"
             voice = texttospeech.VoiceSelectionParams(
-                language_code="vi-VN",
+                language_code=language_code,
                 name=voice_id
             )
 

@@ -2,14 +2,13 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.services.google_tts_service import GoogleTTSService
 from app.schemas.video_script import VideoScript
-from app.schemas.voice import VoiceRequest, VoiceResponse, ScriptVoiceRequest
+from app.schemas.voice import VoiceRequest, VoiceResponse, ScriptVoiceRequest, TextToSpeechRequest, TextToSpeechResponse
 from app.crud import video_script as crud
 from app.database import get_db
 from typing import List
 import os
 import tempfile
 import shutil
-from pydantic import BaseModel
 from fastapi.responses import Response
 
 router = APIRouter()
@@ -47,51 +46,51 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/script-to-speech")
-async def script_to_speech(request: ScriptVoiceRequest, db: Session = Depends(get_db)):
+@router.post("/script-to-speech/{script_id}", response_model=List[TextToSpeechResponse])
+async def script_to_speech(
+    script_id: str,
+    request: TextToSpeechRequest,
+    db: Session = Depends(get_db)
+):
     """
-    Tạo file audio cho toàn bộ script
+    Tạo voice cho tất cả các scene trong một video script
     """
     try:
-        # Kiểm tra script tồn tại
-        script = crud.get_script(db, request.script_id)
+        # Lấy script từ database
+        script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
-        # Tạo thư mục tạm để lưu file audio
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Lấy danh sách text từ script
-            script_texts = [scene.voice_over for scene in script.scenes if scene.voice_over]
-            
-            # Tạo các file audio
-            audio_paths = google_tts_service.generate_voices_for_script(script_texts, temp_dir)
-            
-            # Lưu thông tin audio vào database
-            for scene, audio_path in zip(script.scenes, audio_paths):
-                if scene.voice_over:
-                    crud.create_voice_audio(db, request.script_id, scene.id, {
-                        "audio_url": audio_path,
-                        "text_content": scene.voice_over,
-                        "voice_id": request.voice_id,
-                        "speed": request.speed
-                    })
-            
-            # Tạo file zip chứa tất cả audio
-            zip_path = os.path.join(temp_dir, "audio_files.zip")
-            shutil.make_archive(zip_path[:-4], 'zip', temp_dir)
-            
-            # Đọc file zip
-            with open(zip_path, "rb") as f:
-                zip_data = f.read()
-            
-            # Trả về file zip
-            return Response(
-                content=zip_data,
-                media_type="application/zip",
-                headers={
-                    "Content-Disposition": f"attachment; filename=script_audio_{script.title}.zip"
-                }
+
+        responses = []
+        # Tạo voice cho từng scene
+        for scene in script.scenes:
+            if not scene.voice_over:
+                continue
+
+            # Tạo voice cho scene
+            audio_path = google_tts_service.generate_voice(
+                text=scene.voice_over,
+                voice_id=request.voice_id,
+                speed=request.speed
             )
-            
+
+            # Lưu thông tin voice vào database
+            voice_audio = crud.create_voice_audio(db, {
+                "script_id": script_id,
+                "scene_id": scene.id,
+                "audio_url": audio_path,
+                "text_content": scene.voice_over,
+                "voice_id": request.voice_id,
+                "speed": request.speed
+            })
+
+            responses.append(TextToSpeechResponse(
+                audio_url=audio_path,
+                text=scene.voice_over,
+                voice_id=request.voice_id,
+                speed=request.speed
+            ))
+
+        return responses
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 
