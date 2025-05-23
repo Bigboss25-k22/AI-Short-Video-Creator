@@ -23,6 +23,10 @@ def get_script(db: Session, script_id: str) -> Optional[VideoScript]:
     """Lấy thông tin một kịch bản video"""
     return db.query(VideoScript).filter(VideoScript.id == script_id).first()
 
+def get_scene(db: Session, scene_id: str) -> Optional[Scene]:
+    """Lấy thông tin một cảnh trong kịch bản"""
+    return db.query(Scene).filter(Scene.id == scene_id).first()
+
 def get_scripts(db: Session, skip: int = 0, limit: int = 100) -> List[VideoScript]:
     """Lấy danh sách các kịch bản video"""
     return db.query(VideoScript).offset(skip).limit(limit).all()

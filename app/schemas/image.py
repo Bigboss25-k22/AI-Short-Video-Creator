@@ -4,6 +4,7 @@ from datetime import datetime
 
 class ImageGenerationRequest(BaseModel):
     scene_id: str
+    prompt: Optional[str] = None
     width: Optional[int] = 1024
     height: Optional[int] = 768
 
