@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 from app.common.exception.errors import CustomError
 from app.common.response.response_code import CustomErrorCode
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="", tags=["users"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

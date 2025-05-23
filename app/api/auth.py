@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="", tags=["auth"])
 
 
 @router.post("/token", response_model=TokenResponse)

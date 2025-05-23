@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import video_script, voice
+from app.api import api_router
 from app.core.config import get_settings
 from app.common.exception.exception_handler import register_exception
 from app.core.logging import setup_logging
@@ -27,8 +27,7 @@ app.add_middleware(
 )
 
 # Đăng ký các router
-app.include_router(video_script.router, prefix="/api/video-scripts", tags=["video-scripts"])
-app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
+app.include_router(api_router, prefix="/api")
 
 @app.get("/")
 async def root():
