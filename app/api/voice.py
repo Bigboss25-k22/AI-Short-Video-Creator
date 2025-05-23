@@ -27,14 +27,6 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
             speed=request.speed
         )
         
-        # Lưu thông tin audio vào database
-        audio_data = {
-            "audio_url": audio_path,
-            "text_content": request.text,
-            "voice_id": request.voice_id,
-            "speed": request.speed
-        }
-        
         # Trả về đường dẫn audio
         return VoiceResponse(
             url=audio_path,
@@ -75,14 +67,18 @@ async def script_to_speech(
             )
 
             # Lưu thông tin voice vào database
-            voice_audio = crud.create_voice_audio(db, {
-                "script_id": script_id,
-                "scene_id": scene.id,
+            audio_data = {
                 "audio_url": audio_path,
                 "text_content": scene.voice_over,
                 "voice_id": request.voice_id,
                 "speed": request.speed
-            })
+            }
+            voice_audio = crud.create_voice_audio(
+                db=db,
+                script_id=script_id,
+                scene_id=scene.id,
+                audio_data=audio_data
+            )
 
             responses.append(TextToSpeechResponse(
                 audio_url=audio_path,

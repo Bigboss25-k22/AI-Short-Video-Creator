@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Google TTS Configuration
     GOOGLE_APPLICATION_CREDENTIALS: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
 
+    # Replicate Configuration
+    REPLICATE_API_TOKEN: str = os.getenv("REPLICATE_API_TOKEN", "")
+    REPLICATE_MODEL_ID: str = os.getenv("REPLICATE_MODEL_ID", "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b")
+
     # Application Configuration
     APP_NAME: str = "Architecture Design API"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"

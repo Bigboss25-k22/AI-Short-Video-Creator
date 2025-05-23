@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.video_script import VideoScript, Scene, VisualElement, VoiceAudio
+from app.models.video_script import VideoScript, Scene, VoiceAudio
 from app.schemas.video_script import CreateScriptRequest
 from typing import List, Optional
 import uuid
@@ -20,18 +20,18 @@ def create_script(db: Session, request: CreateScriptRequest) -> VideoScript:
     return db_script
 
 def get_script(db: Session, script_id: str) -> Optional[VideoScript]:
-    """Lấy thông tin chi tiết của một kịch bản"""
+    """Lấy thông tin một kịch bản video"""
     return db.query(VideoScript).filter(VideoScript.id == script_id).first()
 
 def get_scripts(db: Session, skip: int = 0, limit: int = 100) -> List[VideoScript]:
-    """Lấy danh sách các kịch bản"""
+    """Lấy danh sách các kịch bản video"""
     return db.query(VideoScript).offset(skip).limit(limit).all()
 
-def update_script(db: Session, script_id: str, script_data: dict) -> Optional[VideoScript]:
-    """Cập nhật thông tin kịch bản"""
+def update_script(db: Session, script_id: str, update_data: dict) -> Optional[VideoScript]:
+    """Cập nhật thông tin kịch bản video"""
     db_script = get_script(db, script_id)
     if db_script:
-        for key, value in script_data.items():
+        for key, value in update_data.items():
             setattr(db_script, key, value)
         db.commit()
         db.refresh(db_script)

@@ -47,7 +47,7 @@ class DeepSeekService:
                     scene_number=1,
                     description="Cảnh mở đầu giới thiệu tổng quan",
                     duration=20,
-                    visual_elements=["Hình ảnh tổng thể", "Logo công ty"],
+                    visual_elements="Một căn phòng khách hiện đại với ánh sáng tự nhiên từ cửa sổ lớn. Các đồ nội thất được sắp xếp gọn gàng: sofa màu xám nhạt ở giữa, bàn trà kính hiện đại phía trước, và tủ TV tối giản ở góc phòng. Tường sơn màu trắng kem, sàn gỗ sáng màu. Có một vài cây xanh nhỏ đặt ở góc phòng và bình hoa tươi trên bàn trà.",
                     background_music="Nhạc nền nhẹ nhàng",
                     voice_over="Chào mừng đến với video giới thiệu về thiết kế nhà hiện đại"
                 ),
@@ -55,7 +55,7 @@ class DeepSeekService:
                     scene_number=2,
                     description="Trình bày các điểm nổi bật",
                     duration=30,
-                    visual_elements=["Hình ảnh chi tiết", "Biểu đồ thống kê"],
+                    visual_elements="Phòng bếp mở với đảo bếp ở giữa. Ánh sáng từ đèn LED trắng ấm chiếu xuống đảo bếp. Tủ bếp màu trắng bóng với tay nắm màu đen. Bàn ăn gỗ sáng màu với 4 ghế đơn giản. Có một cửa sổ lớn phía sau bàn ăn, rèm trắng mỏng đang được kéo lên để ánh sáng tự nhiên tràn vào.",
                     background_music="Nhạc nền sôi động",
                     voice_over="Hãy cùng khám phá những điểm nổi bật trong thiết kế"
                 ),
@@ -63,7 +63,7 @@ class DeepSeekService:
                     scene_number=3,
                     description="Kết luận và call-to-action",
                     duration=10,
-                    visual_elements=["Thông tin liên hệ", "QR code"],
+                    visual_elements="Phòng ngủ chính với giường lớn ở giữa, drap giường màu xám nhạt. Đèn ngủ đặt trên bàn cạnh giường tạo ánh sáng ấm áp. Tường sơn màu xanh nhạt, có một bức tranh trừu tượng treo trên đầu giường. Cửa sổ có rèm dày màu xám đậm, một phần được kéo lên để ánh sáng chiều nhẹ nhàng lọt vào.",
                     background_music="Nhạc nền kết thúc",
                     voice_over="Liên hệ ngay với chúng tôi để được tư vấn chi tiết"
                 )
@@ -121,12 +121,31 @@ class DeepSeekService:
 
             Yêu cầu:
             1. Tách nội dung thành các cảnh logic và hấp dẫn
-            2. Mỗi cảnh cần có:
-               - Mô tả chi tiết
-               - Thời lượng phù hợp (tổng {duration} giây)
-               - Các yếu tố hình ảnh cần thiết
-               - Đề xuất nhạc nền
-               - Lời thuyết minh
+            2. Mỗi cảnh cần có mô tả chi tiết về:
+               - Không gian và bối cảnh:
+                 + Vị trí diễn ra cảnh (phòng khách, phòng ngủ, sân trường, etc.)
+                 + Mô tả chi tiết không gian (kích thước, màu sắc tường, sàn, trần)
+                 + Các đồ vật trong không gian (bàn, ghế, tủ, etc.)
+                 + Vị trí và trạng thái của các đồ vật
+               - Ánh sáng và màu sắc:
+                 + Nguồn sáng (ánh sáng tự nhiên, đèn điện, etc.)
+                 + Hướng chiếu sáng
+                 + Màu sắc và cường độ ánh sáng
+                 + Bóng đổ và hiệu ứng ánh sáng
+               - Nhân vật và trang phục:
+                 + Vị trí của nhân vật trong khung hình
+                 + Tư thế và biểu cảm
+                 + Trang phục chi tiết (màu sắc, kiểu dáng)
+                 + Các phụ kiện đi kèm
+               - Thời tiết và thời gian:
+                 + Thời điểm trong ngày
+                 + Điều kiện thời tiết
+                 + Các yếu tố thời tiết đặc biệt (mưa, nắng, etc.)
+
+            3. Thời lượng phù hợp (tổng {duration} giây)
+            4. Mô tả chi tiết cho việc tạo hình ảnh (visual_elements) phải là một đoạn văn mô tả đầy đủ về không gian, ánh sáng, nhân vật và thời tiết BẰNG TIẾNG ANH
+            5. Đề xuất nhạc nền phù hợp với cảm xúc của cảnh
+            6. Lời thuyết minh phù hợp
 
             Format JSON:
             {{
@@ -137,10 +156,10 @@ class DeepSeekService:
                 "scenes": [
                     {{
                         "scene_number": Số thứ tự cảnh,
-                        "description": "Mô tả cảnh",
+                        "description": "Mô tả ngắn gọn về cảnh",
                         "duration": Thời lượng cảnh,
-                        "visual_elements": ["Yếu tố hình ảnh 1", "Yếu tố hình ảnh 2"],
-                        "background_music": "Đề xuất nhạc nền",
+                        "visual_elements": "Detailed description of space, lighting, characters and weather in English for image generation",
+                        "background_music": "Đề xuất nhạc nền phù hợp với cảm xúc",
                         "voice_over": "Lời thuyết minh"
                     }}
                 ]
@@ -150,7 +169,7 @@ class DeepSeekService:
             scenes_payload = {
                 "model": "deepseek/deepseek-chat:free",
                 "messages": [
-                    {"role": "system", "content": "Bạn là một chuyên gia phân cảnh video."},
+                    {"role": "system", "content": "Bạn là một chuyên gia phân cảnh video và thiết kế hình ảnh, có khả năng tạo ra những mô tả chi tiết và sinh động về bối cảnh, ánh sáng, và nhân vật."},
                     {"role": "user", "content": scenes_prompt}
                 ],
                 "temperature": 0.7,

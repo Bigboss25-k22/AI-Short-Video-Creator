@@ -38,6 +38,7 @@ class Scene(Base):
     scene_number = Column(Integer)
     description = Column(Text)
     duration = Column(Integer)
+    visual_elements = Column(Text)  # Mô tả chi tiết cho việc tạo hình ảnh
     background_music = Column(String(255))
     voice_over = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -45,18 +46,8 @@ class Scene(Base):
 
     # Relationships
     script = relationship("VideoScript", back_populates="scenes")
-    visual_elements = relationship("VisualElement", secondary=scene_visual_elements, back_populates="scenes")
     voice_audios = relationship("VoiceAudio", back_populates="scene")
-
-class VisualElement(Base):
-    __tablename__ = "visual_elements"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    element_name = Column(String(255))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    scenes = relationship("Scene", secondary=scene_visual_elements, back_populates="visual_elements")
+    images = relationship("SceneImage", back_populates="scene", cascade="all, delete-orphan")
 
 class VoiceAudio(Base):
     __tablename__ = "voice_audios"
@@ -66,10 +57,25 @@ class VoiceAudio(Base):
     scene_id = Column(String(36), ForeignKey("scenes.id"))
     audio_url = Column(Text)
     text_content = Column(Text)
-    voice_id = Column(String(10))
+    voice_id = Column(String(20))
     speed = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     script = relationship("VideoScript", back_populates="voice_audios")
-    scene = relationship("Scene", back_populates="voice_audios") 
+    scene = relationship("Scene", back_populates="voice_audios")
+
+class SceneImage(Base):
+    __tablename__ = "scene_images"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    scene_id = Column(String(36), ForeignKey("scenes.id"))
+    image_url = Column(Text)  # URL của hình ảnh được tạo
+    prompt = Column(Text)  # Prompt được sử dụng để tạo hình ảnh
+    width = Column(Integer, default=1024)  # Chiều rộng hình ảnh
+    height = Column(Integer, default=768)  # Chiều cao hình ảnh
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    scene = relationship("Scene", back_populates="images") 

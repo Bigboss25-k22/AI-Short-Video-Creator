@@ -43,10 +43,12 @@ async def generate_video_script(request: CreateScriptRequest, db: Session = Depe
         
         # Tạo các scene trong database
         for scene in script.scenes:
-            crud.create_scene(db, db_script.id, {
+            # Tạo scene với visual_elements là mô tả chi tiết
+            db_scene = crud.create_scene(db, db_script.id, {
                 "scene_number": scene.scene_number,
                 "description": scene.description,
                 "duration": scene.duration,
+                "visual_elements": scene.visual_elements,  # Mô tả chi tiết cho việc tạo hình ảnh
                 "background_music": scene.background_music,
                 "voice_over": scene.voice_over
             })
@@ -78,7 +80,25 @@ async def enhance_video_script(script_id: str, db: Session = Depends(get_db)):
             "total_duration": enhanced_script.total_duration
         })
         
-        return enhanced_script
+        # Xóa các scene cũ
+        for scene in db_script.scenes:
+            db.delete(scene)
+        db.commit()
+        
+        # Tạo các scene mới với mô tả chi tiết
+        for scene in enhanced_script.scenes:
+            db_scene = crud.create_scene(db, script_id, {
+                "scene_number": scene.scene_number,
+                "description": scene.description,
+                "duration": scene.duration,
+                "visual_elements": scene.visual_elements,  # Mô tả chi tiết cho việc tạo hình ảnh
+                "background_music": scene.background_music,
+                "voice_over": scene.voice_over
+            })
+        
+        # Lấy script đã cập nhật
+        updated_script = crud.get_script(db, script_id)
+        return updated_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

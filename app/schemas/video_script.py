@@ -1,14 +1,30 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, field_validator
+from typing import List, Optional, Union
 from datetime import datetime
+
+class VisualElementBase(BaseModel):
+    element_name: str
+
+class VisualElementCreate(VisualElementBase):
+    pass
+
+class VisualElement(VisualElementBase):
+    id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class Scene(BaseModel):
     scene_number: int
     description: str
     duration: int  # Thời lượng tính bằng giây
-    visual_elements: List[str]
+    visual_elements: str  # Mô tả chi tiết cho việc tạo hình ảnh
     background_music: Optional[str] = None
     voice_over: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 class VideoScript(BaseModel):
     id: Optional[str] = None
@@ -19,7 +35,10 @@ class VideoScript(BaseModel):
     scenes: List[Scene]
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    status: str = "draft"  # draft, approved, completed 
+    status: str = "draft"  # draft, approved, completed
+
+    class Config:
+        from_attributes = True
 
 class CreateScriptRequest(BaseModel):
     topic: str
