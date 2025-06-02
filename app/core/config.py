@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     REPLICATE_API_TOKEN: str = os.getenv("REPLICATE_API_TOKEN", "")
     REPLICATE_MODEL_ID: str = os.getenv("REPLICATE_MODEL_ID", "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b")
 
+    # YouTube API Configuration
+    YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
+
+    # TikTok API Configuration (RapidAPI)
+    RAPIDAPI_KEY: str = os.getenv("RAPIDAPI_KEY", "")
+
+    # Google Custom Search API Configuration
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    GOOGLE_SEARCH_ENGINE_ID: str = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "")
+
     # Application Configuration
     APP_NAME: str = "Architecture Design API"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
