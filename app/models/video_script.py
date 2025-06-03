@@ -1,16 +1,8 @@
-from sqlalchemy import Column, String, Integer, Text, Float, ForeignKey, DateTime, Table
+from sqlalchemy import Column, String, Integer, Text, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import uuid
-
-# Bảng trung gian cho visual elements
-scene_visual_elements = Table(
-    'scene_visual_elements',
-    Base.metadata,
-    Column('scene_id', String(36), ForeignKey('scenes.id')),
-    Column('visual_element_id', String(36), ForeignKey('visual_elements.id'))
-)
 
 class VideoScript(Base):
     __tablename__ = "video_scripts"

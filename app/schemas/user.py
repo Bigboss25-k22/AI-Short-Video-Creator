@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 
 class UserBase(BaseModel):
@@ -14,7 +15,11 @@ class UserCreate(UserBase):
 
 
 class User(UserBase):
-    id: int
+    id: str
+    is_active: bool = True
+    is_superuser: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
