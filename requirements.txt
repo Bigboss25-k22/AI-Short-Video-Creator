@@ -41,3 +41,5 @@ selenium==4.15.2
 beautifulsoup4==4.12.2
 webdriver-manager==4.0.1
 PyJWT>=2.8.0,<2.9.0
+# Thêm thư viện xử lý audio
+pydub==0.25.1
