@@ -5,16 +5,17 @@ from app.schemas.video_script import VideoScript
 from app.schemas.voice import VoiceRequest, VoiceResponse, ScriptVoiceRequest, TextToSpeechRequest, TextToSpeechResponse, UpdateVoiceRequest
 from app.crud import video_script as crud
 from app.database import get_db
-from app.models.video_script import MediaStatus, ScriptStatus
+from app.models.video_script import MediaStatus, ScriptStatus, VoiceAudio
 from typing import List
 import os
 import tempfile
 import shutil
 import base64
 import logging
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 from pydub import AudioSegment
 import io
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
