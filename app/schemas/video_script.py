@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Optional, Union
 from datetime import datetime
+from app.models.video_script import ScriptStatus
 
 class VisualElementBase(BaseModel):
     element_name: str
@@ -35,7 +36,7 @@ class VideoScript(BaseModel):
     scenes: List[Scene]
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    status: str = "draft"  # draft, approved, completed
+    status: ScriptStatus = ScriptStatus.DRAFT  # Sử dụng enum ScriptStatus
 
     class Config:
         from_attributes = True

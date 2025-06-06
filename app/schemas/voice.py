@@ -26,4 +26,10 @@ class TextToSpeechResponse(BaseModel):
     audio_url: str
     text: str
     voice_id: str
-    speed: float 
+    speed: float
+    scene_number: int  # Thêm số thứ tự của scene
+
+class UpdateVoiceRequest(BaseModel):
+    voice_id: str = "vi-VN-Wavenet-A"  # Vietnamese female voice
+    speed: float = 1.0
+    voice_over: str  # Text mới cho voice over 
