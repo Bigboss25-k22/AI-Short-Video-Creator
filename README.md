@@ -74,8 +74,8 @@ pip install -r requirements.txt
 2. **Cấu hình môi trường**:
 Tạo file `.env` trong thư mục `app` với các biến sau:
 ```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+# Database connection string for Neon
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
 # JWT
 SECRET_KEY=your_secret_key
@@ -83,11 +83,36 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=10080
 
-# AI Services
+# Deepseek
 DEEPSEEK_API_KEY=your_deepseek_api_key
-GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
+
+# Application Configuration
+DEBUG=True
+APP_ENV=development
+
+# Zalo AI
+ZALO_AI_API_KEY=your_zalo_ai_api_key
+
+# Google TTS
+GOOGLE_APPLICATION_CREDENTIALS=path/to/tts-credentials.json
+
+# Replicate tạo hình ảnh
 REPLICATE_API_TOKEN=your_replicate_api_token
-REPLICATE_MODEL_ID=stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b
+
+# Google API Key
+YOUTUBE_API_KEY=your_youtube_api_key
+
+# TikTok developers
+TIKTOK_API_KEY=your_tiktok_api_key
+TIKTOK_API_SECRET=your_tiktok_api_secret
+
+# Google Search
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
+
+# Rapid API TikTok
+RAPIDAPI_KEY=your_rapidapi_key
+RAPIDAPI_HOST=tiktok-api23.p.rapidapi.com
 ```
 
 3. **Khởi tạo database**:
