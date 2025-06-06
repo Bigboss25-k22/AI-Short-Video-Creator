@@ -8,7 +8,8 @@ class VoiceRequest(BaseModel):
     speed: float = 1.0
 
 class VoiceResponse(BaseModel):
-    url: str
+    audio_base64: str
+    audio_url: str
     text: str
     voice_id: str
     speed: float
@@ -23,7 +24,30 @@ class TextToSpeechRequest(BaseModel):
     speed: float = 1.0
 
 class TextToSpeechResponse(BaseModel):
+    audio_base64: str
     audio_url: str
     text: str
     voice_id: str
     speed: float 
+
+
+# class VoiceResponse(BaseModel):
+#     audio_base64: str
+#     text: str
+#     voice_id: str
+#     speed: float
+
+# class ScriptVoiceRequest(BaseModel):
+#     script_id: str
+#     voice_id: str = "vi-VN-Wavenet-A"  # Vietnamese female voice
+#     speed: float = 1.0
+
+# class TextToSpeechRequest(BaseModel):
+#     voice_id: str = "vi-VN-Wavenet-A"  # Vietnamese female voice
+#     speed: float = 1.0
+
+# class TextToSpeechResponse(BaseModel):
+#     audio_base64: str
+#     text: str
+#     voice_id: str
+#     speed: float 
