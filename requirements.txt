@@ -1,45 +1,53 @@
+# Core Framework
 fastapi>=0.68.0,<0.69.0
 uvicorn>=0.15.0,<0.16.0
+starlette==0.27.0
+pydantic>=1.8.0,<2.0.0
+pydantic-settings==2.1.0
+typing-extensions==4.8.0
+
+# Database
 sqlalchemy>=1.4.0,<1.5.0
 psycopg2-binary>=2.9.1,<2.10.0
 alembic>=1.7.0,<1.8.0
+
+# Authentication & Security
 python-jose[cryptography]>=3.3.0,<3.4.0
 passlib[bcrypt]>=1.7.4,<1.8.0
 python-multipart>=0.0.5,<0.0.6
+PyJWT>=2.8.0,<2.9.0
+email-validator==2.1.0.post1
+
+# Environment & Configuration
 python-dotenv>=0.19.0,<0.20.0
-pydantic>=1.8.0,<2.0.0
-pydantic-settings==2.1.0
+
+# HTTP & API
 requests==2.31.0
 fastapi-cors==0.0.6
-starlette==0.27.0
-typing-extensions==4.8.0
-email-validator==2.1.0.post1
+
+# AI & Machine Learning Services
 replicate==0.22.0
-pillow==10.1.0
-python-magic==0.4.27
-# Thêm các thư viện Google Cloud
 google-cloud-texttospeech==2.14.1
 google-auth==2.23.3
 google-cloud-core==2.3.3
-# Thêm các thư viện xử lý file và logging
-python-json-logger==2.0.7
-aiofiles==23.2.1
-# Thêm các thư viện cho tìm kiếm và gợi ý nội dung
 google-api-python-client==2.108.0
 google-auth-oauthlib==1.1.0
 google-auth-httplib2==0.1.1
+
+# Image Processing
+pillow==10.1.0
+python-magic==0.4.27
+
+# Audio Processing
+pydub==0.25.1
+
+# File Handling & Logging
+python-json-logger==2.0.7
+aiofiles==23.2.1
+
+# Video Processing & Search
 pytube==15.0.0
 selenium==4.15.2
 beautifulsoup4==4.12.2
 webdriver-manager==4.0.1
 tiktok-api==1.0.0
-# Thêm các thư viện cho tìm kiếm video
-google-api-python-client==2.108.0
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
-selenium==4.15.2
-beautifulsoup4==4.12.2
-webdriver-manager==4.0.1
-PyJWT>=2.8.0,<2.9.0
-# Thêm thư viện xử lý audio
-pydub==0.25.1
