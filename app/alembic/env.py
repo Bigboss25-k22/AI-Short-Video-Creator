@@ -14,11 +14,8 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 # Lấy metadata từ models
-from app.models.user import User
-from app.models.token import RefreshToken
-from app.models.video_script import VideoScript, Scene, VoiceAudio, SceneImage
-from app.database import Base
-
+from app.core.database import Base
+from app.models import User, RefreshToken, VideoScript, Scene, VoiceAudio, SceneImage
 from app.core.config import get_settings
 
 # Alembic config object

@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 import os
 from dotenv import load_dotenv
+from typing import Optional
 
 # Load biến môi trường từ file .env
 load_dotenv()
@@ -46,6 +47,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "Architecture Design API"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
     APP_ENV: str = os.getenv("APP_ENV", "development")
+
+    # Google OAuth2 settings
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
 
     class Config:
         env_file = "app/.env"  # Đường dẫn tới file .env trong thư mục app
