@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.schemas.video_script import VideoScript, CreateScriptRequest
 from app.services.deepseek_service import DeepSeekService
 from app.crud import video_script as crud
-from app.database import get_db
+from app.core.database import get_db
 from app.models.video_script import ScriptStatus, MediaStatus
 from typing import Optional, List
 import os
@@ -160,4 +160,65 @@ async def save_script(
         
         return updated_script
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/scripts/{script_id}")
+async def delete_script(script_id: str, db: Session = Depends(get_db)):
+    """
+    Xóa một kịch bản video và tất cả tài nguyên liên quan
+    """
+    try:
+        # Lấy script từ database
+        script = crud.get_script(db, script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail="Script not found")
+
+        # Xóa tất cả các scene và tài nguyên liên quan
+        for scene in script.scenes:
+            # Xóa tất cả hình ảnh của scene
+            for image in scene.images:
+                db.delete(image)
+            
+            # Xóa tất cả voice audio của scene
+            for voice in scene.voice_audios:
+                db.delete(voice)
+            
+            # Xóa scene
+            db.delete(scene)
+        
+        # Xóa script
+        db.delete(script)
+        db.commit()
+
+        return {"message": "Script and all related resources deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/scenes/{scene_id}")
+async def delete_scene(scene_id: str, db: Session = Depends(get_db)):
+    """
+    Xóa một scene và tất cả tài nguyên liên quan
+    """
+    try:
+        # Lấy scene từ database
+        scene = crud.get_scene(db, scene_id)
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found")
+
+        # Xóa tất cả hình ảnh của scene
+        for image in scene.images:
+            db.delete(image)
+        
+        # Xóa tất cả voice audio của scene
+        for voice in scene.voice_audios:
+            db.delete(voice)
+        
+        # Xóa scene
+        db.delete(scene)
+        db.commit()
+
+        return {"message": "Scene and all related resources deleted successfully"}
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) 

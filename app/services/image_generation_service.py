@@ -64,4 +64,7 @@ class ImageGenerationService:
             
         except Exception as e:
             logger.error(f"Error generating image: {str(e)}")
-            return None 
+            return None
+
+# Tạo instance của ImageGenerationService
+image_generation_service = ImageGenerationService() 

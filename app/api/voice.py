@@ -228,4 +228,34 @@ async def update_voice(
 
     except Exception as e:
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/voice-audio/{audio_id}")
+async def delete_voice_audio(audio_id: str, db: Session = Depends(get_db)):
+    """
+    Xóa một voice audio của scene
+    """
+    try:
+        # Lấy VoiceAudio từ database
+        voice_audio = db.query(VoiceAudio).filter(VoiceAudio.id == audio_id).first()
+        if not voice_audio:
+            raise HTTPException(status_code=404, detail="Voice audio not found")
+
+        # Lấy scene tương ứng
+        scene = crud.get_scene(db, voice_audio.scene_id)
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found")
+
+        # Xóa voice audio
+        db.delete(voice_audio)
+        
+        # Cập nhật trạng thái scene nếu không còn voice audio nào
+        if not scene.voice_audios:
+            scene.voice_status = MediaStatus.PENDING.value
+        
+        db.commit()
+
+        return {"message": "Voice audio deleted successfully"}
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) 

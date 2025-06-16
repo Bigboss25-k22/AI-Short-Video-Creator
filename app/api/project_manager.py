@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Response
 from sqlalchemy.orm import Session
 from app.schemas.video_script import VideoScript, CreateScriptRequest
 from app.crud import video_script as crud
-from app.database import get_db
+from app.core.database import get_db
 from app.models.video_script import ScriptStatus
 from typing import Optional, List
 from pydantic import BaseModel

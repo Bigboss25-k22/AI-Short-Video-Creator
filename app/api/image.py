@@ -7,13 +7,15 @@ from app.schemas.image import (
     SceneImageCreate,
     UpdateSceneImageRequest
 )
-from app.database import get_db
+from app.core.database import get_db
 from app.crud.video_script import get_scene, get_script
-from app.models.video_script import SceneImage, MediaStatus, ScriptStatus
+from app.models.video_script import SceneImage, MediaStatus, ScriptStatus, Scene
 from typing import List
 import os
 import tempfile
 import shutil
+from app import crud
+from app.services.image_generation_service import image_generation_service
 
 router = APIRouter()
 image_service = ImageGenerationService()
@@ -74,27 +76,38 @@ async def generate_image(request: ImageGenerationRequest, db: Session = Depends(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/generate-for-script/{script_id}", response_model=List[ImageGenerationResponse])
-async def generate_images_for_script(script_id: str, db: Session = Depends(get_db)):
+@router.post("/generate-for-script/{script_id}")
+async def generate_images_for_script(
+    script_id: str,
+    db: Session = Depends(get_db)
+):
     """
-    Tạo hình ảnh cho tất cả các scenes trong một script
+    Tạo hình ảnh cho tất cả các scene trong script và trả về tất cả hình ảnh
     """
     try:
-        # Kiểm tra script có tồn tại không
+        # Lấy script từ database
         script = get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-
-        # Cập nhật trạng thái script thành processing
-        script.status = ScriptStatus.PROCESSING.value
-        db.commit()
-
-        generated_images = []
         
-        # Duyệt qua từng scene trong script
-        for scene in script.scenes:
+        print(f"Found script: {script.id}")
+
+        # Lấy tất cả scenes của script
+        scenes = script.scenes  # Sử dụng relationship trực tiếp
+        if not scenes:
+            raise HTTPException(status_code=404, detail="No scenes found for this script")
+        
+        print(f"Found {len(scenes)} scenes")
+
+        # Tạo hình ảnh cho từng scene
+        generated_images = []
+        for scene in scenes:
+            print(f"Processing scene {scene.scene_number}")
+            
             # Kiểm tra xem scene đã có hình ảnh chưa
             if not scene.images:
+                print(f"Scene {scene.scene_number} has no images, generating...")
+                
                 # Cập nhật trạng thái scene thành processing
                 scene.image_status = MediaStatus.PROCESSING.value
                 db.commit()
@@ -102,18 +115,22 @@ async def generate_images_for_script(script_id: str, db: Session = Depends(get_d
                 # Sử dụng visual_elements của scene làm prompt
                 prompt = scene.visual_elements
                 if not prompt:
+                    print(f"Scene {scene.scene_number} has no visual_elements")
                     scene.image_status = MediaStatus.FAILED.value
                     db.commit()
                     continue  # Bỏ qua scene không có visual_elements
 
                 try:
+                    print(f"Generating image for scene {scene.scene_number} with prompt: {prompt}")
                     # Tạo hình ảnh từ prompt
                     image_url = image_service.generate_image(prompt)
                     if not image_url:
+                        print(f"Failed to generate image for scene {scene.scene_number}")
                         scene.image_status = MediaStatus.FAILED.value
                         db.commit()
                         continue  # Bỏ qua nếu tạo hình ảnh thất bại
 
+                    print(f"Successfully generated image for scene {scene.scene_number}")
                     # Tạo bản ghi SceneImage mới
                     scene_image = SceneImage(
                         scene_id=scene.id,
@@ -127,29 +144,46 @@ async def generate_images_for_script(script_id: str, db: Session = Depends(get_d
                     
                     # Cập nhật trạng thái scene thành completed
                     scene.image_status = MediaStatus.COMPLETED.value
-                    generated_images.append(scene_image)
+                    generated_images.append({
+                        "id": scene_image.id,
+                        "scene_id": scene_image.scene_id,
+                        "scene_number": scene.scene_number,
+                        "image_url": scene_image.image_url,
+                        "prompt": scene_image.prompt,
+                        "status": scene_image.status
+                    })
                 except Exception as e:
+                    print(f"Error generating image for scene {scene.scene_number}: {str(e)}")
                     scene.image_status = MediaStatus.FAILED.value
                     db.commit()
                     continue
+            else:
+                print(f"Scene {scene.scene_number} already has images")
+                # Thêm tất cả hình ảnh hiện có của scene vào kết quả
+                for image in scene.images:
+                    generated_images.append({
+                        "id": image.id,
+                        "scene_id": image.scene_id,
+                        "scene_number": scene.scene_number,
+                        "image_url": image.image_url,
+                        "prompt": image.prompt,
+                        "status": image.status
+                    })
 
         db.commit()
         
         # Kiểm tra xem tất cả scenes đã hoàn thành chưa
-        all_completed = all(scene.image_status == MediaStatus.COMPLETED.value for scene in script.scenes)
+        all_completed = all(scene.image_status == MediaStatus.COMPLETED.value for scene in scenes)
         if all_completed:
             script.status = ScriptStatus.COMPLETED.value
         else:
             script.status = ScriptStatus.FAILED.value
         db.commit()
-        
-        # Refresh tất cả các scene_image để lấy thông tin đầy đủ
-        for image in generated_images:
-            db.refresh(image)
 
+        print(f"Returning {len(generated_images)} images")
         return generated_images
-
     except Exception as e:
+        print(f"Error in generate_images_for_script: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -258,4 +292,158 @@ async def get_script_images(script_id: str, db: Session = Depends(get_db)):
 
         return all_images
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/scene-images/{image_id}")
+async def delete_scene_image(image_id: str, db: Session = Depends(get_db)):
+    """
+    Xóa một hình ảnh của scene
+    """
+    try:
+        # Lấy SceneImage từ database
+        scene_image = db.query(SceneImage).filter(SceneImage.id == image_id).first()
+        if not scene_image:
+            raise HTTPException(status_code=404, detail="Scene image not found")
+
+        # Lấy scene tương ứng
+        scene = get_scene(db, scene_image.scene_id)
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found")
+
+        # Xóa hình ảnh
+        db.delete(scene_image)
+        
+        # Cập nhật trạng thái scene nếu không còn hình ảnh nào
+        if not scene.images:
+            scene.image_status = MediaStatus.PENDING.value
+        
+        db.commit()
+
+        return {"message": "Scene image deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/save-images-for-script/{script_id}")
+async def save_images_for_script(
+    script_id: str,
+    images: List[dict],
+    db: Session = Depends(get_db)
+):
+    """
+    Lưu hình ảnh cho script với các bước kiểm tra:
+    1. Kiểm tra script tồn tại
+    2. Kiểm tra scene tồn tại
+    3. Kiểm tra hình ảnh đã tồn tại chưa
+    4. Nếu chưa tồn tại -> lưu mới
+    5. Nếu đã tồn tại -> kiểm tra trùng lặp
+    6. Nếu không trùng -> thay thế
+    7. Nếu trùng -> bỏ qua
+    """
+    try:
+        # Kiểm tra script tồn tại
+        script = get_script(db, script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail="Script not found")
+        
+        print(f"Found script: {script.id}")
+        
+        saved_images = []
+        for image_data in images:
+            scene_id = image_data.get("scene_id")
+            scene_number = image_data.get("scene_number")
+            image_url = image_data.get("image_url")
+            prompt = image_data.get("prompt")
+            
+            if not all([scene_id, scene_number, image_url, prompt]):
+                print(f"Skipping invalid image data: {image_data}")
+                continue
+                
+            # Kiểm tra scene tồn tại
+            scene = db.query(Scene).filter(Scene.id == scene_id).first()
+            if not scene:
+                print(f"Scene {scene_id} not found, skipping")
+                continue
+                
+            # Kiểm tra hình ảnh đã tồn tại chưa
+            existing_images = db.query(SceneImage).filter(SceneImage.scene_id == scene_id).all()
+            
+            if not existing_images:
+                # Chưa có hình ảnh -> lưu mới
+                print(f"Creating new image for scene {scene_number}")
+                new_image = SceneImage(
+                    scene_id=scene_id,
+                    image_url=image_url,
+                    prompt=prompt,
+                    width=1024,
+                    height=768,
+                    status=MediaStatus.COMPLETED.value
+                )
+                db.add(new_image)
+                saved_images.append({
+                    "id": new_image.id,
+                    "scene_id": scene_id,
+                    "scene_number": scene_number,
+                    "image_url": image_url,
+                    "prompt": prompt,
+                    "status": MediaStatus.COMPLETED.value,
+                    "action": "created"
+                })
+            else:
+                # Đã có hình ảnh -> kiểm tra trùng lặp
+                is_duplicate = any(img.image_url == image_url for img in existing_images)
+                if not is_duplicate:
+                    # Không trùng -> thay thế
+                    print(f"Replacing existing images for scene {scene_number}")
+                    # Xóa hình ảnh cũ
+                    for old_image in existing_images:
+                        db.delete(old_image)
+                    
+                    # Tạo hình ảnh mới
+                    new_image = SceneImage(
+                        scene_id=scene_id,
+                        image_url=image_url,
+                        prompt=prompt,
+                        width=1024,
+                        height=768,
+                        status=MediaStatus.COMPLETED.value
+                    )
+                    db.add(new_image)
+                    saved_images.append({
+                        "id": new_image.id,
+                        "scene_id": scene_id,
+                        "scene_number": scene_number,
+                        "image_url": image_url,
+                        "prompt": prompt,
+                        "status": MediaStatus.COMPLETED.value,
+                        "action": "replaced"
+                    })
+                else:
+                    # Trùng -> bỏ qua
+                    print(f"Skipping duplicate image for scene {scene_number}")
+                    saved_images.append({
+                        "id": existing_images[0].id,
+                        "scene_id": scene_id,
+                        "scene_number": scene_number,
+                        "image_url": image_url,
+                        "prompt": prompt,
+                        "status": MediaStatus.COMPLETED.value,
+                        "action": "skipped"
+                    })
+        
+        # Cập nhật trạng thái của scenes và script
+        for scene in script.scenes:
+            scene.image_status = MediaStatus.COMPLETED.value
+        
+        script.status = ScriptStatus.COMPLETED.value
+        db.commit()
+        
+        return {
+            "message": f"Successfully processed {len(saved_images)} images",
+            "images": saved_images
+        }
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error saving images: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 
