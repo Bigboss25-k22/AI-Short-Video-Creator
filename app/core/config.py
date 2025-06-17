@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int
 
     # Database settings
-    DATABASE_URL: str
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     # OpenAI Configuration
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
