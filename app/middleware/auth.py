@@ -39,7 +39,7 @@ class AuthMiddleware:
                 response = await call_next(request)
                 return response
 
-            except jwt.ExpiredSignatureError:
+            except ExpiredSignatureError:
                 # Access token hết hạn, thử refresh
                 refresh_token = request.cookies.get("refresh_token")
                 if not refresh_token:
@@ -77,7 +77,7 @@ class AuthMiddleware:
                 response.headers["X-New-Access-Token"] = new_access_token
                 return response
 
-            except jwt.InvalidTokenError:
+            except JWTError:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token không hợp lệ"
