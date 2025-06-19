@@ -4,7 +4,7 @@ from app.core.auth import decode_token, create_access_token
 from app.crud.token import get_refresh_token, save_refresh_token, delete_refresh_token
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
-import jwt
+from jose import JWTError, ExpiredSignatureError
 from functools import wraps
 
 security = HTTPBearer()
@@ -15,9 +15,13 @@ class AuthMiddleware:
 
     async def __call__(self, request: Request, call_next):
         try:
-            # Lấy access token từ header
-            auth = await security(request)
-            access_token = auth.credentials
+            # Lấy access token từ cookie
+            access_token = request.cookies.get("access_token")
+            if not access_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Không tìm thấy access token trong cookie"
+                )
 
             try:
                 # Verify và decode access token
@@ -37,7 +41,7 @@ class AuthMiddleware:
 
             except jwt.ExpiredSignatureError:
                 # Access token hết hạn, thử refresh
-                refresh_token = request.headers.get("X-Refresh-Token")
+                refresh_token = request.cookies.get("refresh_token")
                 if not refresh_token:
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,13 +65,15 @@ class AuthMiddleware:
                     "role": user.role
                 })
 
-                # Forward request với access token mới
-                request.headers.__dict__["_list"].append(
-                    (b"authorization", f"Bearer {new_access_token}".encode())
-                )
+                # Set access token mới vào cookie
                 response = await call_next(request)
-
-                # Thêm access token mới vào response header
+                response.set_cookie(
+                    key="access_token",
+                    value=new_access_token,
+                    httponly=True,
+                    secure=False,  # Để True nếu dùng HTTPS ở production
+                    samesite="lax"
+                )
                 response.headers["X-New-Access-Token"] = new_access_token
                 return response
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from sqlalchemy.orm import Session
 from app.schemas.video_script import VideoScript, CreateScriptRequest
 from app.services.deepseek_service import DeepSeekService
@@ -10,6 +10,8 @@ import os
 import tempfile
 import shutil
 from pydantic import BaseModel
+from app.models.user import User
+from app.middleware.auth import require_auth
 
 router = APIRouter()
 deepseek_service = DeepSeekService()
@@ -134,13 +136,14 @@ async def get_script(script_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/scripts/{script_id}/save", response_model=VideoScript)
+@require_auth()
 async def save_script(
+    request: Request,
     script_id: str,
-    user_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Lưu script với user_id của người dùng
+    Lưu script với user_id của người dùng hiện tại
     """
     try:
         # Kiểm tra script có tồn tại không
@@ -152,12 +155,17 @@ async def save_script(
         if script.creator_id:
             raise HTTPException(status_code=400, detail="Script already has a creator")
         
+        # Lấy user từ accessToken
+        username = request.state.user["sub"]
+        user = db.query(User).filter_by(username=username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_id = user.id
+        
         # Cập nhật creator_id cho script
         updated_script = crud.update_script(db, script_id, {"creator_id": user_id})
-        
         # Cập nhật status thành completed
         updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.COMPLETED.value})
-        
         return updated_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

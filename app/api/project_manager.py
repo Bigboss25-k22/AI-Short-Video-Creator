@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from sqlalchemy.orm import Session
 from app.schemas.video_script import VideoScript, CreateScriptRequest
 from app.crud import video_script as crud
 from app.core.database import get_db
 from app.models.video_script import ScriptStatus
+from app.models.user import User
 from typing import Optional, List
 from pydantic import BaseModel
+from app.middleware.auth import require_auth
 
 router = APIRouter()
 
@@ -15,25 +17,30 @@ class ScriptUpdateRequest(BaseModel):
     target_audience: Optional[str] = None
     status: Optional[ScriptStatus] = None
 
-@router.get("/user/{user_id}/scripts", response_model=List[VideoScript])
+@router.get("/user/scripts", response_model=List[VideoScript])
+@require_auth()
 async def get_user_scripts(
-    user_id: str,
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     status: Optional[ScriptStatus] = None,
     db: Session = Depends(get_db)
 ):
     """
-    Lấy danh sách kịch bản video của một người dùng
+    Lấy danh sách kịch bản video của user hiện tại
     """
     try:
-        scripts = crud.get_scripts_by_user(db, user_id, skip=skip, limit=limit, status=status)
+        username = request.state.user["sub"]
+        user = db.query(User).filter_by(username=username).first()
+        scripts = crud.get_scripts_by_user(db, user.id, skip=skip, limit=limit, status=status)
         return scripts
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/scripts/{script_id}", response_model=VideoScript)
+@require_auth()
 async def get_script(
+    request: Request,
     script_id: str,
     db: Session = Depends(get_db)
 ):
@@ -49,7 +56,9 @@ async def get_script(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/scripts/{script_id}", response_model=VideoScript)
+@require_auth()
 async def update_script(
+    request: Request,
     script_id: str,
     update_data: ScriptUpdateRequest,
     db: Session = Depends(get_db)
@@ -61,17 +70,16 @@ async def update_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
-        # Chuyển đổi Pydantic model thành dict và loại bỏ các giá trị None
         update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
-        
         updated_script = crud.update_script(db, script_id, update_dict)
         return updated_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/scripts/{script_id}")
+@require_auth()
 async def delete_script(
+    request: Request,
     script_id: str,
     db: Session = Depends(get_db)
 ):
@@ -82,17 +90,17 @@ async def delete_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
         success = crud.delete_script(db, script_id)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete script")
-        
         return {"message": "Script deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/scripts/{script_id}/archive")
+@require_auth()
 async def archive_script(
+    request: Request,
     script_id: str,
     db: Session = Depends(get_db)
 ):
@@ -103,14 +111,15 @@ async def archive_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
         updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.ARCHIVED})
         return {"message": "Script archived successfully", "script": updated_script}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/scripts/{script_id}/restore")
+@require_auth()
 async def restore_script(
+    request: Request,
     script_id: str,
     db: Session = Depends(get_db)
 ):
@@ -121,10 +130,8 @@ async def restore_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
         if script.status != ScriptStatus.ARCHIVED:
             raise HTTPException(status_code=400, detail="Script is not archived")
-        
         updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.ACTIVE})
         return {"message": "Script restored successfully", "script": updated_script}
     except Exception as e:
