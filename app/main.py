@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import api_router
+from app.api import api_router, youtube
 from app.core.config import get_settings
 from app.common.exception.exception_handler import register_exception
 from app.core.logging import setup_logging
@@ -28,6 +28,7 @@ app.add_middleware(
 
 # Đăng ký các router
 app.include_router(api_router, prefix="/api")
+app.include_router(youtube.router)
 
 @app.get("/")
 async def root():

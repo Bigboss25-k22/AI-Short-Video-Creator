@@ -44,4 +44,9 @@ class VideoScript(BaseModel):
 class CreateScriptRequest(BaseModel):
     topic: str
     target_audience: str
-    duration: int 
+    duration: int
+
+class UploadVideoRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    privacy_status: Optional[str] = "private" 
