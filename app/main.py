@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import api_router
+from app.api import api_router, storage as storage_api
 from app.core.config import get_settings
 from app.common.exception.exception_handler import register_exception
 from app.core.logging import setup_logging
@@ -20,14 +20,16 @@ app = FastAPI(
 # Cấu hình CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],  # Đúng domain FE, KHÔNG ĐƯỢC LÀ "*"
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Đăng ký các router
 app.include_router(api_router, prefix="/api")
+app.include_router(storage_api.router, prefix="/api/v1/storage", tags=["Storage"])
 
 @app.get("/")
 async def root():

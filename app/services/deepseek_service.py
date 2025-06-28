@@ -6,6 +6,11 @@ from app.core.config import get_settings
 from typing import List
 import logging
 import sys
+import time
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import datetime
+import enum
 
 # Cấu hình logging với UTF-8
 logging.basicConfig(
@@ -33,6 +38,15 @@ class DeepSeekService:
                 "HTTP-Referer": "http://localhost:8000",  # Thêm referer cho OpenRouter
                 "X-Title": "Architecture Design API"  # Thêm title cho OpenRouter
             }
+            # Cấu hình session với retry mechanism
+            self.session = requests.Session()
+            retries = Retry(
+                total=3,  # Số lần retry tối đa
+                backoff_factor=1,  # Thời gian chờ giữa các lần retry
+                status_forcelist=[500, 502, 503, 504]  # Các mã lỗi cần retry
+            )
+            self.session.mount('https://', HTTPAdapter(max_retries=retries))
+            self.session.mount('http://', HTTPAdapter(max_retries=retries))
         logger.info("DeepSeekService initialized")
 
     def _get_mock_script(self, topic: str, target_audience: str, duration: int) -> VideoScript:
@@ -105,7 +119,7 @@ class DeepSeekService:
             }
 
             logger.info("Generating overall script content...")
-            content_response = requests.post(self.api_url, headers=self.headers, json=content_payload)
+            content_response = self.session.post(self.api_url, headers=self.headers, json=content_payload, timeout=60)
             
             if content_response.status_code != 200:
                 logger.error(f"Content generation failed: {content_response.text}")
@@ -177,7 +191,7 @@ class DeepSeekService:
             }
 
             logger.info("Splitting content into scenes...")
-            scenes_response = requests.post(self.api_url, headers=self.headers, json=scenes_payload)
+            scenes_response = self.session.post(self.api_url, headers=self.headers, json=scenes_payload, timeout=60)
             
             if scenes_response.status_code != 200:
                 logger.error(f"Scene generation failed: {scenes_response.text}")
@@ -245,15 +259,23 @@ class DeepSeekService:
                     scene.visual_elements.append("Hiệu ứng chuyển cảnh mượt mà")
                 return script
 
+            def default_serializer(obj):
+                if isinstance(obj, (datetime.datetime, datetime.date)):
+                    return obj.isoformat()
+                if isinstance(obj, enum.Enum):
+                    return obj.value
+                raise TypeError(f"Type {type(obj)} not serializable")
+
             prompt = f"""
             Cải thiện kịch bản video sau với các đề xuất chi tiết hơn:
-            {script.json()}
+            {json.dumps(script.dict(by_alias=True, exclude_unset=True), ensure_ascii=False, indent=2, default=default_serializer)}
 
             Yêu cầu:
             1. Thêm chi tiết cho mỗi cảnh
             2. Đề xuất các hiệu ứng chuyển cảnh
             3. Tối ưu thời lượng
             4. Thêm các yếu tố tương tác
+            5. Chỉ trả về kết quả ở dạng JSON, không thêm bất kỳ giải thích nào.
             """
 
             payload = {
@@ -267,7 +289,7 @@ class DeepSeekService:
             }
 
             logger.debug(f"Sending enhancement request to OpenRouter API")
-            response = requests.post(self.api_url, headers=self.headers, json=payload)
+            response = self.session.post(self.api_url, headers=self.headers, json=payload, timeout=60)
             
             if response.status_code == 401:
                 logger.error("Unauthorized: Invalid API key")

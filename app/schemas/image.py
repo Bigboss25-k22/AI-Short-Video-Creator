@@ -5,8 +5,8 @@ from datetime import datetime
 class ImageGenerationRequest(BaseModel):
     scene_id: str
     prompt: Optional[str] = None
-    width: Optional[int] = 1024
-    height: Optional[int] = 768
+    width: int = 1024
+    height: int = 768
 
 class SceneImageBase(BaseModel):
     image_url: str
@@ -33,7 +33,10 @@ class ImageGenerationResponse(BaseModel):
     prompt: str
     width: int
     height: int
-    created_at: datetime
+    status: str
+    scene_number: int
 
-    class Config:
-        from_attributes = True 
+class UpdateSceneImageRequest(BaseModel):
+    prompt: str
+    width: Optional[int] = None
+    height: Optional[int] = None 

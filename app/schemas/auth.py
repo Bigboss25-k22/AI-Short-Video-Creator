@@ -5,7 +5,7 @@ from typing import Optional
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str
 
 
 class RefreshTokenRequest(BaseModel):
@@ -19,3 +19,15 @@ class AuthorizationCodeRequest(BaseModel):
 
 class AuthorizationCodeResponse(BaseModel):
     code: str
+
+
+class GoogleAuthRequest(BaseModel):
+    code: str
+
+
+class GoogleUserInfo(BaseModel):
+    email: str
+    name: str
+    picture: Optional[str] = None
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None

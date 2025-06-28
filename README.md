@@ -2,6 +2,15 @@
 
 API tự động tạo kịch bản video với hình ảnh và âm thanh sử dụng AI.
 
+## Tính năng chính
+
+- 🤖 Tự động tạo kịch bản video từ chủ đề
+- 🎨 Tạo hình ảnh cho từng cảnh sử dụng Stable Diffusion
+- 🔊 Tạo giọng nói từ text sử dụng Google TTS
+- 🔍 Tìm kiếm và gợi ý nội dung từ YouTube và TikTok
+- 👥 Quản lý người dùng và xác thực
+- 📱 API RESTful đầy đủ với Swagger documentation
+
 ## Cấu trúc dự án
 
 ```
@@ -9,7 +18,9 @@ app/
 ├── api/                    # API endpoints
 │   ├── video_script.py    # API xử lý kịch bản video
 │   ├── voice.py          # API xử lý âm thanh
-│   └── image.py          # API xử lý hình ảnh
+│   ├── image.py          # API xử lý hình ảnh
+│   ├── auth.py           # API xác thực
+│   └── user.py           # API quản lý người dùng
 ├── core/                  # Cấu hình cốt lõi
 │   └── config.py         # Cấu hình ứng dụng
 ├── crud/                  # Database operations
@@ -31,32 +42,27 @@ app/
 
 ## Công nghệ sử dụng
 
-- **Backend Framework**: FastAPI
-- **Database**: PostgreSQL với SQLAlchemy ORM
-- **AI Services**:
-  - DeepSeek (OpenRouter) cho việc tạo kịch bản
-  - Google Text-to-Speech cho việc tạo giọng nói
-  - Replicate (Stable Diffusion) cho việc tạo hình ảnh
-- **Authentication**: JWT
-- **Database Migration**: Alembic
+### Core Framework
+- FastAPI - Framework API hiện đại, nhanh
+- SQLAlchemy - ORM cho database
+- Alembic - Database migrations
+- Pydantic - Data validation
 
-## Luồng hoạt động
+### Database
+- PostgreSQL - Database chính
 
-1. **Tạo kịch bản video**:
-   - Người dùng gửi yêu cầu tạo kịch bản với topic, target audience và duration
-   - DeepSeek Service tạo nội dung kịch bản tổng thể
-   - Tách nội dung thành các cảnh với mô tả chi tiết
-   - Lưu kịch bản vào database
+### AI Services
+- DeepSeek (OpenRouter) - Tạo kịch bản
+- Google Text-to-Speech - Tạo giọng nói
+- Replicate (Stable Diffusion) - Tạo hình ảnh
 
-2. **Tạo hình ảnh**:
-   - Dựa vào visual_elements của mỗi cảnh
-   - Sử dụng Replicate (Stable Diffusion) để tạo hình ảnh
-   - Lưu URL hình ảnh vào database
+### Authentication & Security
+- JWT - Xác thực người dùng
+- Bcrypt - Mã hóa mật khẩu
 
-3. **Tạo âm thanh**:
-   - Dựa vào voice_over của mỗi cảnh
-   - Sử dụng Google TTS để tạo giọng nói
-   - Lưu URL audio vào database
+### File Processing
+- Pillow - Xử lý hình ảnh
+- Pydub - Xử lý âm thanh
 
 ## Cài đặt và chạy
 
@@ -68,8 +74,8 @@ pip install -r requirements.txt
 2. **Cấu hình môi trường**:
 Tạo file `.env` trong thư mục `app` với các biến sau:
 ```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+# Database connection string for Neon
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
 # JWT
 SECRET_KEY=your_secret_key
@@ -77,11 +83,36 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=10080
 
-# AI Services
+# Deepseek
 DEEPSEEK_API_KEY=your_deepseek_api_key
-GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
+
+# Application Configuration
+DEBUG=True
+APP_ENV=development
+
+# Zalo AI
+ZALO_AI_API_KEY=your_zalo_ai_api_key
+
+# Google TTS
+GOOGLE_APPLICATION_CREDENTIALS=path/to/tts-credentials.json
+
+# Replicate tạo hình ảnh
 REPLICATE_API_TOKEN=your_replicate_api_token
-REPLICATE_MODEL_ID=stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b
+
+# Google API Key
+YOUTUBE_API_KEY=your_youtube_api_key
+
+# TikTok developers
+TIKTOK_API_KEY=your_tiktok_api_key
+TIKTOK_API_SECRET=your_tiktok_api_secret
+
+# Google Search
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
+
+# Rapid API TikTok
+RAPIDAPI_KEY=your_rapidapi_key
+RAPIDAPI_HOST=tiktok-api23.p.rapidapi.com
 ```
 
 3. **Khởi tạo database**:
@@ -104,37 +135,27 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## API Endpoints
 
+### Authentication
+- `POST /api/auth/login` - Đăng nhập
+- `POST /api/auth/refresh` - Làm mới token
+- `POST /api/auth/register` - Đăng ký
+
 ### Video Script
+- `POST /api/video-scripts/generate` - Tạo kịch bản mới
+- `GET /api/video-scripts/{script_id}` - Lấy thông tin kịch bản
+- `PUT /api/video-scripts/{script_id}` - Cập nhật kịch bản
+- `DELETE /api/video-scripts/{script_id}` - Xóa kịch bản
 
-1. **Tạo kịch bản mới**:
-```bash
-POST /api/video-scripts/generate
-{
-    "topic": "Chủ đề video",
-    "target_audience": "Đối tượng mục tiêu",
-    "duration": 90
-}
-```
+### Image Generation
+- `POST /api/images/generate` - Tạo hình ảnh cho cảnh
+- `POST /api/images/generate-for-script/{script_id}` - Tạo hình ảnh cho toàn bộ script
+- `GET /api/images/list/{script_id}` - Lấy danh sách hình ảnh của script
 
-2. **Tạo hình ảnh cho cảnh**:
-```bash
-POST /api/images/generate
-{
-    "scene_id": "id_của_cảnh",
-    "width": 1024,
-    "height": 768
-}
-```
-
-3. **Tạo âm thanh cho cảnh**:
-```bash
-POST /api/voice/text-to-speech
-{
-    "text": "Nội dung cần chuyển thành giọng nói",
-    "voice_id": "vi-VN-Standard-A",
-    "speed": 1.0
-}
-```
+### Voice Generation
+- `POST /api/voice/text-to-speech` - Tạo giọng nói từ text
+- `POST /api/voice/script-to-speech/{script_id}` - Tạo giọng nói cho toàn bộ script
+- `GET /api/voice/play/{scene_id}` - Nghe thử giọng nói của scene
+- `GET /api/voice/play-script/{script_id}` - Nghe thử giọng nói của toàn bộ script
 
 ## Ví dụ sử dụng
 
@@ -152,7 +173,7 @@ curl -X POST "http://localhost:8000/api/video-scripts/generate" \
 
 2. **Tạo hình ảnh cho tất cả cảnh**:
 ```bash
-curl -X POST "http://localhost:8000/api/images/generate-all/{script_id}" \
+curl -X POST "http://localhost:8000/api/images/generate-for-script/{script_id}" \
      -H "accept: application/json"
 ```
 
@@ -164,6 +185,15 @@ curl -X POST "http://localhost:8000/api/voice/script-to-speech/{script_id}" \
            "voice_id": "vi-VN-Standard-A",
            "speed": 1.0
          }'
+```
+
+4. **Nghe thử âm thanh**:
+```bash
+# Nghe thử một scene
+curl -X GET "http://localhost:8000/api/voice/play/{scene_id}" --output voice.mp3
+
+# Nghe thử toàn bộ script
+curl -X GET "http://localhost:8000/api/voice/play-script/{script_id}" --output script.mp3
 ```
 
 ## Xử lý lỗi
@@ -197,7 +227,7 @@ black .
 2. Tạo branch mới (`git checkout -b feature/amazing-feature`)
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
-5. Tạo Pull Request 
+5. Tạo Pull Request
 
 
 

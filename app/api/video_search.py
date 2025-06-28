@@ -362,4 +362,168 @@ async def get_tiktok_trending(
 
     except Exception as e:
         logger.error(f"Error getting TikTok trending: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/tiktok/trending-keywords")
+async def get_tiktok_trending_keywords(
+    limit: int = 20,
+    country: str = "US"
+):
+    """
+    Lấy danh sách trending keywords từ TikTok
+    """
+    try:
+        settings = get_settings()
+        
+        # Kiểm tra API key
+        if not settings.RAPIDAPI_KEY:
+            logger.warning("RAPIDAPI_KEY not configured, returning fallback keywords")
+            fallback_keywords = [
+                "trending", "viral", "funny", "dance", "music", 
+                "comedy", "food", "travel", "beauty", "fashion",
+                "gaming", "sports", "education", "lifestyle", "entertainment"
+            ]
+            return {
+                'keywords': fallback_keywords,
+                'total': len(fallback_keywords),
+                'country': country,
+                'source': 'fallback'
+            }
+        
+        # Gọi TikTok API thông qua RapidAPI để lấy trending videos
+        url = "https://tiktok-api23.p.rapidapi.com/api/trending/video"
+        headers = {
+            "X-RapidAPI-Key": settings.RAPIDAPI_KEY,
+            "X-RapidAPI-Host": "tiktok-api23.p.rapidapi.com"
+        }
+        params = {
+            "page": 1,
+            "limit": limit,
+            "period": 7,  # 7 ngày gần đây
+            "order_by": "vv",  # Sắp xếp theo lượt xem
+            "country": country
+        }
+        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        
+        # Xử lý các lỗi HTTP cụ thể
+        if response.status_code == 429:
+            logger.warning("TikTok API rate limit exceeded, using fallback keywords")
+            fallback_keywords = [
+                "trending", "viral", "funny", "dance", "music", 
+                "comedy", "food", "travel", "beauty", "fashion",
+                "gaming", "sports", "education", "lifestyle", "entertainment"
+            ]
+            return {
+                'keywords': fallback_keywords,
+                'total': len(fallback_keywords),
+                'country': country,
+                'source': 'fallback',
+                'error': 'Rate limit exceeded'
+            }
+        elif response.status_code == 403:
+            logger.warning("TikTok API access forbidden, using fallback keywords")
+            fallback_keywords = [
+                "trending", "viral", "funny", "dance", "music", 
+                "comedy", "food", "travel", "beauty", "fashion",
+                "gaming", "sports", "education", "lifestyle", "entertainment"
+            ]
+            return {
+                'keywords': fallback_keywords,
+                'total': len(fallback_keywords),
+                'country': country,
+                'source': 'fallback',
+                'error': 'Access forbidden'
+            }
+        
+        response.raise_for_status()
+        data = response.json()
+
+        # Trích xuất keywords từ title và description của trending videos
+        keywords = set()
+        for item in data.get('data', []):
+            # Lấy từ title
+            title = item.get('title', '')
+            if title:
+                # Tách từ title và lọc từ có độ dài > 2, loại bỏ ký tự đặc biệt
+                title_words = [
+                    word.strip().lower() 
+                    for word in title.split() 
+                    if len(word.strip()) > 2 and word.strip().isalnum()
+                ]
+                keywords.update(title_words[:3])  # Lấy 3 từ đầu tiên
+            
+            # Lấy từ description
+            desc = item.get('desc', '')
+            if desc:
+                # Tách từ description và lọc từ có độ dài > 2
+                desc_words = [
+                    word.strip().lower() 
+                    for word in desc.split() 
+                    if len(word.strip()) > 2 and word.strip().isalnum()
+                ]
+                keywords.update(desc_words[:2])  # Lấy 2 từ đầu tiên
+            
+            # Lấy hashtags nếu có
+            hashtags = item.get('hashtags', [])
+            if hashtags:
+                for hashtag in hashtags[:3]:  # Lấy 3 hashtag đầu tiên
+                    if hashtag.get('name'):
+                        clean_hashtag = hashtag['name'].replace('#', '').lower()
+                        if len(clean_hashtag) > 2:
+                            keywords.add(clean_hashtag)
+            
+            # Giới hạn số lượng keywords
+            if len(keywords) >= 15:
+                break
+
+        # Chuyển set thành list và sắp xếp theo độ dài từ ngắn đến dài
+        keywords_list = sorted(list(keywords), key=len)[:15]
+        
+        # Nếu không có keywords nào, sử dụng fallback
+        if not keywords_list:
+            keywords_list = [
+                "trending", "viral", "funny", "dance", "music", 
+                "comedy", "food", "travel", "beauty", "fashion",
+                "gaming", "sports", "education", "lifestyle", "entertainment"
+            ]
+        
+        return {
+            'keywords': keywords_list,
+            'total': len(keywords_list),
+            'country': country,
+            'source': 'tiktok'
+        }
+
+    except requests.exceptions.Timeout:
+        logger.error("TikTok API request timeout")
+        fallback_keywords = [
+            "trending", "viral", "funny", "dance", "music", 
+            "comedy", "food", "travel", "beauty", "fashion",
+            "gaming", "sports", "education", "lifestyle", "entertainment"
+        ]
+        return {
+            'keywords': fallback_keywords,
+            'total': len(fallback_keywords),
+            'country': country,
+            'source': 'fallback',
+            'error': 'Request timeout'
+        }
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error calling TikTok API for trending keywords: {e}")
+        # Trả về keywords mặc định nếu API lỗi
+        fallback_keywords = [
+            "trending", "viral", "funny", "dance", "music", 
+            "comedy", "food", "travel", "beauty", "fashion",
+            "gaming", "sports", "education", "lifestyle", "entertainment"
+        ]
+        return {
+            'keywords': fallback_keywords,
+            'total': len(fallback_keywords),
+            'country': country,
+            'source': 'fallback',
+            'error': 'API request failed'
+        }
+    except Exception as e:
+        logger.error(f"Error getting TikTok trending keywords: {e}")
         raise HTTPException(status_code=500, detail=str(e)) 

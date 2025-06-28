@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Optional, Union
 from datetime import datetime
+from app.models.video_script import ScriptStatus
 
 class VisualElementBase(BaseModel):
     element_name: str
@@ -32,10 +33,11 @@ class VideoScript(BaseModel):
     description: str
     target_audience: str
     total_duration: int  # Tổng thời lượng tính bằng giây
+    video_url: Optional[str] = None  # URL video sau khi upload lên cloud storage
     scenes: List[Scene]
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    status: str = "draft"  # draft, approved, completed
+    status: ScriptStatus = ScriptStatus.DRAFT  # Sử dụng enum ScriptStatus
 
     class Config:
         from_attributes = True
@@ -43,4 +45,9 @@ class VideoScript(BaseModel):
 class CreateScriptRequest(BaseModel):
     topic: str
     target_audience: str
-    duration: int 
+    duration: int
+
+class UploadVideoRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    privacy_status: Optional[str] = "private" 
