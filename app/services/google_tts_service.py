@@ -6,7 +6,17 @@ from typing import List
 import tempfile
 from app.core.config import get_settings
 import base64
+from google.oauth2 import service_account
+import warnings
 
+# Suppress Google API Client cache warning
+warnings.filterwarnings("ignore", message="file_cache is only supported with oauth2client<4.0.0")
+
+# Cấu hình logging với UTF-8
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 class GoogleTTSService:

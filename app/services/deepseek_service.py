@@ -26,60 +26,67 @@ class DeepSeekService:
     def __init__(self):
         settings = get_settings()
         self.api_key = settings.DEEPSEEK_API_KEY
-        if not self.api_key or self.api_key == "your-deepseek-api-key-here":
-            logger.warning("Using mock data for testing - DEEPSEEK_API_KEY not set or invalid")
+        
+        # Kiểm tra API key có hợp lệ không
+        if not self.api_key or self.api_key == "" or self.api_key == "your-deepseek-api-key-here":
+            logger.warning("DEEPSEEK_API_KEY not set or invalid - Using mock data for testing")
             self.use_mock = True
+            self.api_url = None
+            self.headers = None
+            self.session = None
         else:
+            logger.info("DEEPSEEK_API_KEY found - Using OpenRouter API")
             self.use_mock = False
             self.api_url = "https://openrouter.ai/api/v1/chat/completions"
             self.headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:8000",  # Thêm referer cho OpenRouter
-                "X-Title": "Architecture Design API"  # Thêm title cho OpenRouter
+                "HTTP-Referer": "http://localhost:8000",
+                "X-Title": "Architecture Design API"
             }
             # Cấu hình session với retry mechanism
             self.session = requests.Session()
             retries = Retry(
-                total=3,  # Số lần retry tối đa
-                backoff_factor=1,  # Thời gian chờ giữa các lần retry
-                status_forcelist=[500, 502, 503, 504]  # Các mã lỗi cần retry
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[500, 502, 503, 504]
             )
             self.session.mount('https://', HTTPAdapter(max_retries=retries))
             self.session.mount('http://', HTTPAdapter(max_retries=retries))
+        
         logger.info("DeepSeekService initialized")
 
     def _get_mock_script(self, topic: str, target_audience: str, duration: int) -> VideoScript:
         """Tạo dữ liệu mẫu cho testing"""
         return VideoScript(
             title=f"Kịch bản video về {topic}",
-            description=f"Video giới thiệu về {topic} dành cho {target_audience}",
+            description=f"Video chia sẻ về {topic} dành cho {target_audience}",
             target_audience=target_audience,
             total_duration=duration,
             scenes=[
                 Scene(
                     scene_number=1,
-                    description="Cảnh mở đầu giới thiệu tổng quan",
+                    description="Cảnh mở đầu - Giới thiệu chủ đề thi cử",
                     duration=20,
-                    visual_elements="Một căn phòng khách hiện đại với ánh sáng tự nhiên từ cửa sổ lớn. Các đồ nội thất được sắp xếp gọn gàng: sofa màu xám nhạt ở giữa, bàn trà kính hiện đại phía trước, và tủ TV tối giản ở góc phòng. Tường sơn màu trắng kem, sàn gỗ sáng màu. Có một vài cây xanh nhỏ đặt ở góc phòng và bình hoa tươi trên bàn trà.",
-                    background_music="Nhạc nền nhẹ nhàng",
-                    voice_over="Chào mừng đến với video giới thiệu về thiết kế nhà hiện đại"
+                    visual_elements="A high school classroom with wooden desks arranged in rows. Natural light streams through large windows on the left side. The walls are painted light blue with motivational posters. A whiteboard at the front displays exam schedules. Students in school uniforms sit at their desks, some looking nervous, others confident. The atmosphere is tense but hopeful.",
+                    background_music="Nhạc nền nhẹ nhàng, tạo cảm giác lo lắng nhưng hy vọng",
+                    voice_over="Kỳ thi trung học phổ thông - một bước ngoặt quan trọng trong cuộc đời mỗi học sinh"
                 ),
                 Scene(
                     scene_number=2,
-                    description="Trình bày các điểm nổi bật",
+                    description="Cảnh chính - Chia sẻ về thất bại và bài học",
                     duration=30,
-                    visual_elements="Phòng bếp mở với đảo bếp ở giữa. Ánh sáng từ đèn LED trắng ấm chiếu xuống đảo bếp. Tủ bếp màu trắng bóng với tay nắm màu đen. Bàn ăn gỗ sáng màu với 4 ghế đơn giản. Có một cửa sổ lớn phía sau bàn ăn, rèm trắng mỏng đang được kéo lên để ánh sáng tự nhiên tràn vào.",
-                    background_music="Nhạc nền sôi động",
-                    voice_over="Hãy cùng khám phá những điểm nổi bật trong thiết kế"
+                    visual_elements="A student's bedroom with study materials scattered on a wooden desk. A laptop screen shows exam results with disappointing scores. The room has warm lighting from a desk lamp. The student sits on the bed, looking thoughtful but not defeated. Books and notebooks are stacked neatly on shelves. A motivational quote is pinned to the wall.",
+                    background_music="Nhạc nền sâu lắng, phản ánh cảm xúc suy tư",
+                    voice_over="Nhưng điều quan trọng không phải là điểm số, mà là những bài học quý giá từ thất bại"
                 ),
                 Scene(
                     scene_number=3,
-                    description="Kết luận và call-to-action",
+                    description="Cảnh kết thúc - Thông điệp tích cực",
                     duration=10,
-                    visual_elements="Phòng ngủ chính với giường lớn ở giữa, drap giường màu xám nhạt. Đèn ngủ đặt trên bàn cạnh giường tạo ánh sáng ấm áp. Tường sơn màu xanh nhạt, có một bức tranh trừu tượng treo trên đầu giường. Cửa sổ có rèm dày màu xám đậm, một phần được kéo lên để ánh sáng chiều nhẹ nhàng lọt vào.",
-                    background_music="Nhạc nền kết thúc",
-                    voice_over="Liên hệ ngay với chúng tôi để được tư vấn chi tiết"
+                    visual_elements="A bright, modern study room with a student sitting at a clean desk, surrounded by organized study materials. Sunlight pours through a large window, creating a warm, optimistic atmosphere. The student is smiling and looking confident. A calendar on the wall shows future exam dates. Success is clearly within reach.",
+                    background_music="Nhạc nền lạc quan, truyền cảm hứng",
+                    voice_over="Hãy nhớ rằng, mỗi thất bại là một bước đệm để thành công"
                 )
             ]
         )
@@ -90,6 +97,11 @@ class DeepSeekService:
             
             if self.use_mock:
                 logger.info("Using mock data for testing")
+                return self._get_mock_script(topic, target_audience, duration)
+
+            # Kiểm tra lại trước khi gọi API
+            if not self.api_key or self.api_key == "":
+                logger.warning("API key is empty, falling back to mock data")
                 return self._get_mock_script(topic, target_audience, duration)
 
             # Bước 1: Tạo nội dung kịch bản tổng thể
@@ -118,8 +130,13 @@ class DeepSeekService:
                 "max_tokens": 2000
             }
 
-            logger.info("Generating overall script content...")
             content_response = self.session.post(self.api_url, headers=self.headers, json=content_payload, timeout=60)
+            
+            # Kiểm tra response có rỗng không
+            if not content_response.text or content_response.text.strip() == "":
+                logger.error("OpenRouter returned empty response - likely API key issue")
+                logger.error("Falling back to mock data")
+                return self._get_mock_script(topic, target_audience, duration)
             
             if content_response.status_code != 200:
                 logger.error(f"Content generation failed: {content_response.text}")

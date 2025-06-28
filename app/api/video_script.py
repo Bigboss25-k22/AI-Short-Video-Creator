@@ -25,9 +25,7 @@ class UpdateVideoUrlRequest(BaseModel):
     video_url: str
 
 @router.post("/generate", response_model=VideoScript)
-@require_auth()
 async def generate_video_script(
-    request: Request,
     create_request: CreateScriptRequest, 
     db: Session = Depends(get_db)
 ):
@@ -36,13 +34,6 @@ async def generate_video_script(
     """
     db_script = None  # Khởi tạo biến db_script
     try:
-        # Lấy user từ accessToken
-        username = request.state.user["sub"]
-        user = db.query(User).filter_by(username=username).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        user_id = user.id
-        
         # Tạo nội dung script bằng DeepSeek
         script = deepseek_service.generate_video_script(
             topic=create_request.topic,
@@ -50,15 +41,15 @@ async def generate_video_script(
             duration=create_request.duration
         )
         
-        # Tạo script trong database với status DRAFT và creator_id
+        # Tạo script trong database với status DRAFT và creator_id = null
         db_script = crud.create_script(db, create_request)
         
-        # Cập nhật thông tin script trong database bao gồm creator_id
+        # Cập nhật thông tin script trong database (creator_id sẽ là null)
         crud.update_script(db, db_script.id, {
             "title": script.title,
             "description": script.description,
             "total_duration": script.total_duration,
-            "creator_id": user_id,  # Lưu creator_id ngay khi tạo
+            "creator_id": None,  # Để null, sẽ được cập nhật khi user lưu
             "status": ScriptStatus.DRAFT.value  
         })
         

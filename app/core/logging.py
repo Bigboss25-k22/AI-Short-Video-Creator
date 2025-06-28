@@ -1,34 +1,47 @@
 import logging
 import sys
-from logging.handlers import RotatingFileHandler
-import os
+import warnings
+from typing import Dict, Any
 
 def setup_logging():
-    # Tạo thư mục logs nếu chưa tồn tại
-    log_dir = "logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    # Cấu hình logging
+    """Thiết lập logging cho ứng dụng"""
+    
+    # Suppress specific warnings
+    warnings.filterwarnings("ignore", message="file_cache is only supported with oauth2client<4.0.0")
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="googleapiclient")
+    
+    # Cấu hình root logger
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            RotatingFileHandler(
-                filename=os.path.join(log_dir, "app.log"),
-                maxBytes=10485760,  # 10MB
-                backupCount=5,
-                encoding='utf-8'
-            ),
             logging.StreamHandler(sys.stdout)
         ]
     )
-
-    # Cấu hình logging cho các thư viện bên ngoài
-    logging.getLogger("uvicorn").setLevel(logging.INFO)
-    logging.getLogger("fastapi").setLevel(logging.INFO)
-    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
-
-    # Cấu hình encoding cho stdout
-    if sys.stdout.encoding != 'utf-8':
-        sys.stdout.reconfigure(encoding='utf-8') 
+    
+    # Cấu hình specific loggers
+    loggers_to_configure: Dict[str, Any] = {
+        "uvicorn": {"level": logging.INFO},
+        "uvicorn.error": {"level": logging.INFO},
+        "uvicorn.access": {"level": logging.WARNING},
+        "googleapiclient": {"level": logging.WARNING},
+        "googleapiclient.discovery_cache": {"level": logging.WARNING},
+        "app": {"level": logging.INFO},
+    }
+    
+    for logger_name, config in loggers_to_configure.items():
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(config["level"])
+        
+        # Prevent duplicate handlers
+        if not logger.handlers:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            ))
+            logger.addHandler(handler)
+    
+    # Disable propagation for some noisy loggers
+    logging.getLogger("googleapiclient.discovery_cache").propagate = False
+    
+    logging.info("Logging configuration completed") 
