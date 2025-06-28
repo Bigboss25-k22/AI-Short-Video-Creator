@@ -43,7 +43,7 @@ def upload_video(
     
     if not google_access_token:
         raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
-    
+  
     temp_file_path = None
     try:
         if file is not None:

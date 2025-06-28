@@ -69,7 +69,7 @@ class AuthMiddleware:
                             status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Token không hợp lệ"
                         )
-
+                  
             # Fallback: Sử dụng access token nếu không có refresh token hoặc refresh token lỗi
             if access_token:
                 try:
@@ -100,13 +100,11 @@ class AuthMiddleware:
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Access token không hợp lệ"
                     )
-
             # Nếu không có token nào hợp lệ
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Không có token hợp lệ"
             )
-
         except HTTPException as e:
             raise e
         except Exception as e:

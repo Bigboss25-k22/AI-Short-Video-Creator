@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     refresh_token = request.cookies.get("refresh_token")
     access_token = request.cookies.get("access_token")
-    
+   
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Không thể xác thực người dùng",

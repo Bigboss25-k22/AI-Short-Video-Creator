@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from fastapi.responses import RedirectResponse, JSONResponse
 
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 router = APIRouter(prefix="", tags=["auth"])
 google_auth_service = GoogleAuthService()
@@ -79,6 +80,7 @@ async def login(
     save_refresh_token(db, refresh_token, user.id, expires_at)
 
     # Set token vào cookie HTTPOnly và redirect về home FE
+
     # response = RedirectResponse(url="http://localhost:3000/explore")
     response = JSONResponse(content={"msg": "Login successful"})
 
@@ -97,8 +99,7 @@ async def login(
         samesite="lax"
     )
     return response
-
-
+  
 @router.post("/refresh")
 async def refresh_token(
     body: RefreshTokenRequest,
@@ -137,8 +138,7 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Không thể refresh token"
         )
-
-
+        
 # @router.post("/logout")
 # async def logout(
 #     body: RefreshTokenRequest,
@@ -162,7 +162,6 @@ async def logout(
     response.delete_cookie(key="refresh_token")
     return response
 
-
 @router.get("/google/login")
 async def google_login():
     """Tạo URL đăng nhập Google OAuth2"""
@@ -175,7 +174,6 @@ async def google_callback(
     code: str = Query(..., description="Authorization code from Google"),
     db: Session = Depends(get_db)
 ):
-
     try:
         # Lấy tokens từ Google
         google_tokens = await google_auth_service.get_access_token(code)
@@ -210,7 +208,6 @@ async def google_callback(
             secure=False,  # Để True nếu dùng HTTPS ở production
             samesite="lax"
         )
-        
         # Set Google tokens cho YouTube API
         response.set_cookie(
             key="google_access_token",
@@ -227,10 +224,5 @@ async def google_callback(
                 secure=False,
                 samesite="lax"
             )
-        
-        return response
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
         )
+

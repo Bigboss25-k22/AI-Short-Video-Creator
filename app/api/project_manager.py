@@ -83,10 +83,7 @@ async def update_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-
-
         update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
-
         updated_script = crud.update_script(db, script_id, update_dict)
         return updated_script
     except Exception as e:
@@ -106,11 +103,10 @@ async def delete_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-
+            
         success = crud.delete_script(db, script_id)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete script")
-
         return {"message": "Script deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -129,7 +125,7 @@ async def archive_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-
+            
         updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.ARCHIVED})
         return {"message": "Script archived successfully", "script": updated_script}
     except Exception as e:

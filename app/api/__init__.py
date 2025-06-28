@@ -12,3 +12,4 @@ api_router.include_router(user.router, prefix="/users", tags=["users"])
 api_router.include_router(youtube_trends.router, tags=["youtube-trends"])
 api_router.include_router(youtube.router, tags=["youtube"])
 api_router.include_router(user.router) 
+
