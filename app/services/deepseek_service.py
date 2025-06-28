@@ -9,6 +9,8 @@ import sys
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import datetime
+import enum
 
 # Cấu hình logging với UTF-8
 logging.basicConfig(
@@ -257,15 +259,23 @@ class DeepSeekService:
                     scene.visual_elements.append("Hiệu ứng chuyển cảnh mượt mà")
                 return script
 
+            def default_serializer(obj):
+                if isinstance(obj, (datetime.datetime, datetime.date)):
+                    return obj.isoformat()
+                if isinstance(obj, enum.Enum):
+                    return obj.value
+                raise TypeError(f"Type {type(obj)} not serializable")
+
             prompt = f"""
             Cải thiện kịch bản video sau với các đề xuất chi tiết hơn:
-            {script.json()}
+            {json.dumps(script.dict(by_alias=True, exclude_unset=True), ensure_ascii=False, indent=2, default=default_serializer)}
 
             Yêu cầu:
             1. Thêm chi tiết cho mỗi cảnh
             2. Đề xuất các hiệu ứng chuyển cảnh
             3. Tối ưu thời lượng
             4. Thêm các yếu tố tương tác
+            5. Chỉ trả về kết quả ở dạng JSON, không thêm bất kỳ giải thích nào.
             """
 
             payload = {

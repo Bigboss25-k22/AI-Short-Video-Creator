@@ -13,6 +13,7 @@ class VideoInfo(BaseModel):
     platform: str  # "youtube", "tiktok", "google"
     duration: Optional[str] = None
     channel_name: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 class SearchRequest(BaseModel):
     keyword: str

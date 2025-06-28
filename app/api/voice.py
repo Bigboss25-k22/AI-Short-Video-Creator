@@ -9,6 +9,8 @@ from app.models.video_script import MediaStatus, ScriptStatus, VoiceAudio
 from typing import List
 import logging
 from pydantic import BaseModel
+import tempfile
+import base64
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,9 +37,28 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
         )
 
         logger.info("Successfully generated base64 audio")
-
+        
+        # Tạo file tạm để lưu audio
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+                # Đảm bảo chuỗi base64 hợp lệ bằng cách thêm padding nếu cần
+                padding = 4 - (len(audio_base64) % 4)
+                if padding != 4:
+                    audio_base64 += '=' * padding
+                
+                # Giải mã base64 và lưu vào file
+                audio_bytes = base64.b64decode(audio_base64)
+                temp_file.write(audio_bytes)
+                audio_path = temp_file.name
+                logger.info(f"Successfully saved audio to temporary file: {audio_path}")
+        except Exception as e:
+            logger.error(f"Error saving audio to file: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error saving audio: {str(e)}")
+        
+        # Trả về base64 audio
         return VoiceResponse(
             audio_base64=audio_base64,
+            audio_url=audio_path,
             text=request.text,
             voice_id=request.voice_id,
             speed=request.speed
@@ -46,6 +67,7 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error in text_to_speech: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/script-to-speech/{script_id}", response_model=List[TextToSpeechResponse])
 async def script_to_speech(

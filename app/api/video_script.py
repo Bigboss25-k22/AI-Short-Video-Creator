@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from sqlalchemy.orm import Session
-from app.schemas.video_script import VideoScript, CreateScriptRequest
+from app.schemas.video_script import VideoScript, CreateScriptRequest, VideoScript as VideoScriptSchema
 from app.services.deepseek_service import DeepSeekService
 from app.crud import video_script as crud
 from app.core.database import get_db
@@ -21,28 +21,44 @@ class TextToSpeechRequest(BaseModel):
     voice_id: str = "vi-VN-Wavenet-A"  # Vietnamese female voice
     speed: float = 1.0
 
+class UpdateVideoUrlRequest(BaseModel):
+    video_url: str
+
 @router.post("/generate", response_model=VideoScript)
-async def generate_video_script(request: CreateScriptRequest, db: Session = Depends(get_db)):
+@require_auth()
+async def generate_video_script(
+    request: Request,
+    create_request: CreateScriptRequest, 
+    db: Session = Depends(get_db)
+):
     """
     Tạo kịch bản video tự động dựa trên chủ đề, đối tượng mục tiêu và thời lượng
     """
     db_script = None  # Khởi tạo biến db_script
     try:
+        # Lấy user từ accessToken
+        username = request.state.user["sub"]
+        user = db.query(User).filter_by(username=username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_id = user.id
+        
         # Tạo nội dung script bằng DeepSeek
         script = deepseek_service.generate_video_script(
-            topic=request.topic,
-            target_audience=request.target_audience,
-            duration=request.duration
+            topic=create_request.topic,
+            target_audience=create_request.target_audience,
+            duration=create_request.duration
         )
         
-        # Tạo script trong database với status DRAFT
-        db_script = crud.create_script(db, request)
+        # Tạo script trong database với status DRAFT và creator_id
+        db_script = crud.create_script(db, create_request)
         
-        # Cập nhật thông tin script trong database
+        # Cập nhật thông tin script trong database bao gồm creator_id
         crud.update_script(db, db_script.id, {
             "title": script.title,
             "description": script.description,
             "total_duration": script.total_duration,
+            "creator_id": user_id,  # Lưu creator_id ngay khi tạo
             "status": ScriptStatus.DRAFT.value  
         })
         
@@ -79,22 +95,20 @@ async def enhance_video_script(script_id: str, db: Session = Depends(get_db)):
         db_script = crud.get_script(db, script_id)
         if not db_script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
+        # Chuyển sang schema Pydantic để loại bỏ InstanceState
+        script_schema = VideoScriptSchema.model_validate(db_script)
         # Cải thiện script bằng DeepSeek
-        enhanced_script = deepseek_service.enhance_script(db_script)
-        
+        enhanced_script = deepseek_service.enhance_script(script_schema)
         # Cập nhật thông tin trong database
         crud.update_script(db, script_id, {
             "title": enhanced_script.title,
             "description": enhanced_script.description,
             "total_duration": enhanced_script.total_duration
         })
-        
         # Xóa các scene cũ
         for scene in db_script.scenes:
             db.delete(scene)
         db.commit()
-        
         # Tạo các scene mới với mô tả chi tiết
         for scene in enhanced_script.scenes:
             db_scene = crud.create_scene(db, script_id, {
@@ -105,7 +119,6 @@ async def enhance_video_script(script_id: str, db: Session = Depends(get_db)):
                 "background_music": scene.background_music,
                 "voice_over": scene.voice_over
             })
-        
         # Lấy script đã cập nhật
         updated_script = crud.get_script(db, script_id)
         return updated_script
@@ -121,6 +134,7 @@ async def list_scripts(skip: int = 0, limit: int = 100, db: Session = Depends(ge
         return crud.get_scripts(db, skip=skip, limit=limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/scripts/{script_id}", response_model=VideoScript)
 async def get_script(script_id: str, db: Session = Depends(get_db)):
@@ -229,4 +243,41 @@ async def delete_scene(scene_id: str, db: Session = Depends(get_db)):
         return {"message": "Scene and all related resources deleted successfully"}
     except Exception as e:
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/scripts/{script_id}/video-url", response_model=VideoScript)
+@require_auth()
+async def update_video_url(
+    request: Request,
+    script_id: str,
+    video_url_request: UpdateVideoUrlRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Cập nhật video URL cho script sau khi upload lên cloud storage
+    """
+    try:
+        # Kiểm tra script có tồn tại không
+        script = crud.get_script(db, script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail="Script not found")
+        
+        # Lấy user từ accessToken để kiểm tra quyền
+        username = request.state.user["sub"]
+        user = db.query(User).filter_by(username=username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Kiểm tra xem user có quyền cập nhật script này không
+        if script.creator_id and script.creator_id != user.id:
+            raise HTTPException(status_code=403, detail="You don't have permission to update this script")
+        
+        # Cập nhật video URL
+        updated_script = crud.update_script(db, script_id, {
+            "video_url": video_url_request.video_url,
+            "status": ScriptStatus.COMPLETED.value  # Cập nhật status thành completed khi có video
+        })
+        
+        return updated_script
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

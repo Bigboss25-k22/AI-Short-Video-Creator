@@ -26,6 +26,7 @@ class VideoScript(Base):
     description = Column(Text)
     target_audience = Column(String(255))
     total_duration = Column(Integer)
+    video_url = Column(Text, nullable=True)  # URL video sau khi upload lên cloud storage
     status = Column(String(20), default=ScriptStatus.DRAFT.value)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

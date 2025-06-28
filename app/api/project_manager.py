@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from sqlalchemy.orm import Session
-from app.schemas.video_script import VideoScript, CreateScriptRequest
+from app.schemas.video_script import VideoScript, CreateScriptRequest, Scene
 from app.crud import video_script as crud
 from app.core.database import get_db
 from app.models.video_script import ScriptStatus
@@ -15,7 +15,20 @@ class ScriptUpdateRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     target_audience: Optional[str] = None
+    total_duration: Optional[int] = None
+    video_url: Optional[str] = None
     status: Optional[ScriptStatus] = None
+
+class SceneUpdateRequest(BaseModel):
+    scene_number: int
+    description: str
+    duration: int
+    visual_elements: str
+    background_music: Optional[str] = None
+    voice_over: Optional[str] = None
+
+class ScriptScenesUpdateRequest(BaseModel):
+    scenes: List[SceneUpdateRequest]
 
 @router.get("/user/scripts", response_model=List[VideoScript])
 @require_auth()
@@ -90,6 +103,7 @@ async def delete_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
+            
         success = crud.delete_script(db, script_id)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete script")
@@ -111,6 +125,7 @@ async def archive_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
+            
         updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.ARCHIVED})
         return {"message": "Script archived successfully", "script": updated_script}
     except Exception as e:
@@ -130,9 +145,49 @@ async def restore_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
+
         if script.status != ScriptStatus.ARCHIVED:
             raise HTTPException(status_code=400, detail="Script is not archived")
+
         updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.ACTIVE})
         return {"message": "Script restored successfully", "script": updated_script}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/scripts/{script_id}/scenes", response_model=VideoScript)
+@require_auth()
+async def update_script_scenes(
+    request: Request,
+    script_id: str,
+    update_data: ScriptScenesUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Cập nhật scenes của kịch bản video
+    """
+    try:
+        script = crud.get_script(db, script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail="Script not found")
+
+        # Xóa tất cả scenes hiện tại
+        for scene in script.scenes:
+            db.delete(scene)
+        db.commit()
+
+        # Tạo scenes mới
+        for scene_data in update_data.scenes:
+            crud.create_scene(db, script_id, {
+                "scene_number": scene_data.scene_number,
+                "description": scene_data.description,
+                "duration": scene_data.duration,
+                "visual_elements": scene_data.visual_elements,
+                "background_music": scene_data.background_music,
+                "voice_over": scene_data.voice_over
+            })
+
+        # Lấy script đã cập nhật
+        updated_script = crud.get_script(db, script_id)
+        return updated_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

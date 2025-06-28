@@ -12,6 +12,7 @@ youtube_service = YouTubeService()
 
 @router.get("/channel/videos")
 def get_channel_videos(
+    request: Request,
     channel_id: str = Query(..., description="YouTube channel ID"),
     max_results: int = Query(20, ge=1, le=50, description="Số video tối đa trả về"),
     page_token: str = Query(None, description="Page token cho phân trang")
@@ -19,10 +20,11 @@ def get_channel_videos(
     """
     Lấy danh sách video của kênh kèm thống kê chi tiết từng video
     """
-    result = youtube_service.get_channel_videos_with_stats(channel_id, max_results, page_token)
+    google_access_token = request.cookies.get("google_access_token")
+    result = youtube_service.get_channel_videos_with_stats(channel_id, max_results, page_token, google_access_token)
     if not result['videos']:
         raise HTTPException(status_code=404, detail="Không tìm thấy video nào cho kênh này hoặc có lỗi xảy ra.")
-    return result 
+    return result
 
 @router.post("/upload")
 def upload_video(
@@ -36,9 +38,12 @@ def upload_video(
     """
     Đăng tải video lên YouTube (tự lấy access_token từ cookie, hỗ trợ upload file hoặc từ URL)
     """
-    access_token = request.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Chưa đăng nhập hoặc thiếu access token")
+    google_access_token = request.cookies.get("google_access_token")
+    google_refresh_token = request.cookies.get("google_refresh_token")
+    
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+  
     temp_file_path = None
     try:
         if file is not None:
@@ -55,15 +60,42 @@ def upload_video(
                         f.write(chunk)
         else:
             raise HTTPException(status_code=400, detail="Phải upload file hoặc cung cấp file_url")
+        
+        # Thử upload với access token hiện tại
         response = youtube_service.upload_video(
-            access_token=access_token,
+            access_token=google_access_token,
             title=title,
             description=description,
             file_path=temp_file_path,
-            privacy_status=privacy_status
+            privacy_status=privacy_status,
+            refresh_token=google_refresh_token
         )
+        
+        # Kiểm tra nếu có lỗi
+        if isinstance(response, dict) and response.get('error'):
+            raise HTTPException(status_code=400, detail=response['error'])
+        
         if not response:
-            raise HTTPException(status_code=500, detail="Đăng tải video thất bại.")
+            # Nếu thất bại, thử refresh token
+            if google_refresh_token:
+                new_access_token = youtube_service.refresh_google_token(google_refresh_token)
+                if new_access_token:
+                    response = youtube_service.upload_video(
+                        access_token=new_access_token,
+                        title=title,
+                        description=description,
+                        file_path=temp_file_path,
+                        privacy_status=privacy_status,
+                        refresh_token=google_refresh_token
+                    )
+                    
+                    # Kiểm tra lỗi sau khi refresh
+                    if isinstance(response, dict) and response.get('error'):
+                        raise HTTPException(status_code=400, detail=response['error'])
+            
+            if not response:
+                raise HTTPException(status_code=500, detail="Đăng tải video thất bại.")
+        
         return response
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
@@ -89,52 +121,59 @@ def get_my_videos(
     page_token: str = Query(None, description="Page token cho phân trang")
 ):
     """
-    Lấy danh sách video của kênh người dùng hiện tại (tự động lấy channel_id từ access_token trong cookie)
+    Lấy danh sách video của kênh người dùng hiện tại
     """
-    access_token = request.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Chưa đăng nhập hoặc thiếu access token")
-    # Lấy channel_id từ access_token
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
     try:
-        credentials = Credentials(token=access_token)
-        youtube = build('youtube', 'v3', credentials=credentials)
-        response = youtube.channels().list(part='id', mine=True).execute()
-        if not response['items']:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kênh YouTube cho người dùng này")
-        channel_id = response['items'][0]['id']
+        result = youtube_service.get_my_videos(google_access_token, max_results, page_token)
+        return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Không lấy được channel_id: {e}")
-    # Lấy danh sách video như cũ
-    result = youtube_service.get_channel_videos_with_stats(channel_id, max_results, page_token)
-    if not result['videos']:
-        raise HTTPException(status_code=404, detail="Không tìm thấy video nào cho kênh này hoặc có lỗi xảy ra.")
-    return result 
+        raise HTTPException(status_code=500, detail=f"Không lấy được danh sách video: {e}")
+
+@router.get("/my/channel-id")
+def get_my_channel_id(request: Request):
+    """
+    Lấy channel ID của kênh YouTube của người dùng hiện tại
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        channel_id = youtube_service.get_my_channel_id(google_access_token)
+        return {"channel_id": channel_id} if channel_id else None
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được channel ID: {e}")
 
 @router.get("/my/stats")
 def get_my_channel_stats(request: Request):
     """
-    Lấy thống kê cơ bản về kênh YouTube của người dùng hiện tại (subscribers, tổng view, tổng video, tên kênh, mô tả, avatar, ngày tạo...)
+    Lấy thống kê cơ bản về kênh YouTube của người dùng hiện tại
     """
-    access_token = request.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Chưa đăng nhập hoặc thiếu access token")
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
     try:
-        credentials = Credentials(token=access_token)
-        youtube = build('youtube', 'v3', credentials=credentials)
-        response = youtube.channels().list(part='snippet,statistics', mine=True).execute()
-        if not response['items']:
-            raise HTTPException(status_code=404, detail="Không tìm thấy kênh YouTube cho người dùng này")
-        item = response['items'][0]
-        stats = {
-            'channel_id': item['id'],
-            'title': item['snippet']['title'],
-            'description': item['snippet'].get('description', ''),
-            'published_at': item['snippet']['publishedAt'],
-            'avatar_url': item['snippet']['thumbnails']['high']['url'],
-            'subscriber_count': int(item['statistics'].get('subscriberCount', 0)),
-            'view_count': int(item['statistics'].get('viewCount', 0)),
-            'video_count': int(item['statistics'].get('videoCount', 0)),
-        }
-        return stats
+        stats = youtube_service.get_my_channel_stats(google_access_token)
+        return stats if stats else None
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Không lấy được thống kê kênh: {e}") 
+        raise HTTPException(status_code=500, detail=f"Không lấy được thống kê kênh: {e}")
+
+@router.post("/refresh-token")
+def refresh_google_token(request: Request):
+    """
+    Refresh Google access token
+    """
+    google_refresh_token = request.cookies.get("google_refresh_token")
+    if not google_refresh_token:
+        raise HTTPException(status_code=401, detail="Không có refresh token")
+    
+    new_access_token = youtube_service.refresh_google_token(google_refresh_token)
+    if not new_access_token:
+        raise HTTPException(status_code=500, detail="Không thể refresh token")
+    
+    return {"access_token": new_access_token} 

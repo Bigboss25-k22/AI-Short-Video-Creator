@@ -18,9 +18,30 @@ class GoogleAuthService:
         self.redirect_uri = settings.GOOGLE_REDIRECT_URI
         self.token_url = "https://oauth2.googleapis.com/token"
         self.userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+        
+        # Scopes cần thiết cho ứng dụng
+        self.scopes = [
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/youtube.upload",
+            "https://www.googleapis.com/auth/youtube"
+        ]
 
-    async def get_access_token(self, code: str) -> str:
-        """Lấy access token từ Google OAuth2"""
+    def get_auth_url(self) -> str:
+        """Tạo URL đăng nhập Google OAuth2 với đầy đủ scopes"""
+        scopes_str = " ".join(self.scopes)
+        return (
+            f"https://accounts.google.com/o/oauth2/v2/auth?"
+            f"client_id={self.client_id}&"
+            f"redirect_uri={self.redirect_uri}&"
+            f"response_type=code&"
+            f"scope={scopes_str}&"
+            f"access_type=offline&"
+            f"prompt=consent"
+        )
+
+    async def get_access_token(self, code: str) -> dict:
+        """Lấy access token và refresh token từ Google OAuth2"""
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -34,7 +55,14 @@ class GoogleAuthService:
                     }
                 )
                 response.raise_for_status()
-                return response.json()["access_token"]
+                token_data = response.json()
+                return {
+                    "access_token": token_data["access_token"],
+                    "refresh_token": token_data.get("refresh_token"),
+                    "expires_in": token_data.get("expires_in", 3600),
+                    "token_type": token_data.get("token_type", "Bearer")
+                }
+              
         except httpx.HTTPStatusError as e:
             error_detail = e.response.json() if e.response.content else str(e)
             raise HTTPException(

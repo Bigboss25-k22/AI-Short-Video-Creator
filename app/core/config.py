@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # Google OAuth2 settings
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    # GOOGLE_REDIRECT_URI: str = "http://localhost:3000/auth/google/callback"
+
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
 
     class Config:
