@@ -148,7 +148,7 @@ async def save_script(
     db: Session = Depends(get_db)
 ):
     """
-    Lưu script với user_id của người dùng hiện tại
+    Lưu script với user_id của người dùng hiện tại và upload ảnh lên cloud storage
     """
     try:
         # Kiểm tra script có tồn tại không
@@ -167,11 +167,51 @@ async def save_script(
             raise HTTPException(status_code=404, detail="User not found")
         user_id = user.id
         
+        # Upload ảnh lên cloud storage và cập nhật URLs
+        cover_image_url = None
+        for scene in script.scenes:
+            for scene_image in scene.images:
+                if scene_image.image_url and scene_image.image_url.startswith('http'):
+                    # Ảnh đã có URL cloud storage, bỏ qua
+                    continue
+                
+                if scene_image.image_url and os.path.exists(scene_image.image_url):
+                    try:
+                        # Upload ảnh lên cloud storage
+                        with open(scene_image.image_url, 'rb') as image_file:
+                            # Tạo tên file duy nhất
+                            import uuid
+                            file_extension = os.path.splitext(scene_image.image_url)[1]
+                            unique_filename = f"script-images/{script_id}/{uuid.uuid4()}{file_extension}"
+                            
+                            # Upload lên cloud storage (sử dụng storage service)
+                            from app.api.storage import upload_image_to_cloud
+                            cloud_url = await upload_image_to_cloud(image_file, unique_filename)
+                            
+                            # Cập nhật URL trong database
+                            scene_image.image_url = cloud_url
+                            db.commit()
+                            
+                            # Chọn ảnh đầu tiên làm ảnh bìa
+                            if cover_image_url is None:
+                                cover_image_url = cloud_url
+                                
+                    except Exception as e:
+                        print(f"Error uploading image {scene_image.image_url}: {e}")
+                        # Tiếp tục với ảnh khác
+                        continue
+        
         # Cập nhật creator_id cho script
         updated_script = crud.update_script(db, script_id, {"creator_id": user_id})
-        # Cập nhật status thành completed
-        updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.COMPLETED.value})
+        
+        # Cập nhật video_url với ảnh bìa và status thành completed
+        update_data = {"status": ScriptStatus.COMPLETED.value}
+        if cover_image_url:
+            update_data["video_url"] = cover_image_url
+        
+        updated_script = crud.update_script(db, script_id, update_data)
         return updated_script
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

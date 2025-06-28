@@ -167,3 +167,32 @@ async def get_video_url(filename: str):
     except Exception as e:
         logger.error(f"Error generating video URL: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate video URL: {str(e)}")
+
+async def upload_image_to_cloud(image_file, filename: str):
+    """
+    Upload image file lên Google Cloud Storage và trả về public URL
+    """
+    try:
+        logger.info(f"Uploading image file: {filename}")
+        
+        # Khởi tạo Google Cloud Storage client
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(BUCKET_NAME)
+        except Exception as e:
+            logger.error(f"Failed to initialize Google Cloud Storage client: {e}")
+            raise Exception("Google Cloud Storage credentials not configured.")
+        
+        # Tạo blob và upload
+        blob = bucket.blob(filename)
+        blob.upload_from_file(image_file, content_type='image/jpeg')
+        
+        # URL công khai
+        public_url = f"https://storage.googleapis.com/{BUCKET_NAME}/{filename}"
+        
+        logger.info(f"Image uploaded successfully: {filename}")
+        return public_url
+        
+    except Exception as e:
+        logger.error(f"Error uploading image: {e}")
+        raise Exception(f"Failed to upload image: {str(e)}")
