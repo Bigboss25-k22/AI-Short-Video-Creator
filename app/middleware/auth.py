@@ -15,62 +15,17 @@ class AuthMiddleware:
 
     async def __call__(self, request: Request, call_next):
         try:
-            # Ưu tiên sử dụng refresh token trước
+            # Lấy tokens từ cookies
             refresh_token = request.cookies.get("refresh_token")
             access_token = request.cookies.get("access_token")
-            
+
             if not refresh_token and not access_token:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Không tìm thấy token trong cookie"
                 )
 
-            # Nếu có refresh token, ưu tiên sử dụng nó
-            if refresh_token:
-                try:
-                    # Verify refresh token từ database
-                    db_token = get_refresh_token(request.state.db, refresh_token)
-                    if not db_token or db_token.expires_at < datetime.now(timezone.utc):
-                        if db_token:
-                            delete_refresh_token(request.state.db, refresh_token)
-                        raise HTTPException(
-                            status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Refresh token không hợp lệ hoặc đã hết hạn"
-                        )
-                    
-                    # Lấy thông tin user từ refresh token
-                    user = db_token.user
-                    user_payload = {
-                        "sub": user.username,
-                        "role": user.role,
-                        "type": "refresh"
-                    }
-                    request.state.user = user_payload
-                    
-                    # Kiểm tra role nếu có yêu cầu
-                    if self.required_roles and user.role not in self.required_roles:
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Không có quyền truy cập"
-                        )
-                    
-                    # Forward request tới API
-                    response = await call_next(request)
-                    return response
-                    
-                except HTTPException as e:
-                    raise e
-                except Exception as e:
-                    # Nếu refresh token có lỗi, thử fallback về access token
-                    if access_token:
-                        pass  # Tiếp tục với access token
-                    else:
-                        raise HTTPException(
-                            status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Token không hợp lệ"
-                        )
-
-            # Fallback: Sử dụng access token nếu không có refresh token hoặc refresh token lỗi
+            # Ưu tiên sử dụng access token trước
             if access_token:
                 try:
                     # Verify và decode access token
@@ -89,24 +44,71 @@ class AuthMiddleware:
                     return response
 
                 except ExpiredSignatureError:
-                    # Access token hết hạn và không có refresh token
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Access token hết hạn và không có refresh token hợp lệ"
-                    )
+                    # Access token hết hạn, thử dùng refresh token
+                    if refresh_token:
+                        pass  # Tiếp tục với refresh token logic
+                    else:
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Access token hết hạn và không có refresh token"
+                        )
 
                 except JWTError:
+                    # Access token không hợp lệ, thử dùng refresh token
+                    if refresh_token:
+                        pass  # Tiếp tục với refresh token logic
+                    else:
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Access token không hợp lệ và không có refresh token"
+                        )
+            
+            # Fallback: Sử dụng refresh token nếu không có access token hoặc access token lỗi
+            if refresh_token:
+                try:
+                    # Verify refresh token từ database
+                    db_token = get_refresh_token(request.state.db, refresh_token)
+                    if not db_token or db_token.expires_at < datetime.now(timezone.utc):
+                        if db_token:
+                            delete_refresh_token(request.state.db, refresh_token)
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Refresh token không hợp lệ hoặc đã hết hạn"
+                        )
+
+                    # Lấy thông tin user từ refresh token
+                    user = db_token.user
+                    user_payload = {
+                        "sub": user.username,
+                        "role": user.role,
+                        "type": "refresh"
+                    }
+                    request.state.user = user_payload
+
+                    # Kiểm tra role nếu có yêu cầu
+                    if self.required_roles and user.role not in self.required_roles:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Không có quyền truy cập"
+                        )
+
+                    # Forward request tới API
+                    response = await call_next(request)
+                    return response
+
+                except HTTPException as e:
+                    raise e
+                except Exception as e:
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Access token không hợp lệ"
+                        detail="Refresh token không hợp lệ"
                     )
-
+            
             # Nếu không có token nào hợp lệ
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Không có token hợp lệ"
             )
-
         except HTTPException as e:
             raise e
         except Exception as e:
@@ -127,7 +129,7 @@ def require_auth(required_roles: Optional[List[str]] = None):
                     if isinstance(arg, Request):
                         request = arg
                         break
-            
+
             if not request:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -137,4 +139,4 @@ def require_auth(required_roles: Optional[List[str]] = None):
             middleware = AuthMiddleware(required_roles)
             return await middleware(request, lambda r: func(*args, **kwargs))
         return wrapper
-    return decorator 
+    return decorator

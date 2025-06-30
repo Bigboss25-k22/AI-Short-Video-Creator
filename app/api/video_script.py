@@ -12,6 +12,7 @@ import shutil
 from pydantic import BaseModel
 from app.models.user import User
 from app.middleware.auth import require_auth
+import requests
 
 router = APIRouter()
 deepseek_service = DeepSeekService()
@@ -128,18 +129,17 @@ async def enhance_video_script(script_id: str, db: Session = Depends(get_db)):
 @router.get("/scripts", response_model=List[VideoScript])
 async def list_scripts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """
-    Lấy danh sách các kịch bản video
+    Lấy danh sách các kịch bản video (không signed URL)
     """
     try:
         return crud.get_scripts(db, skip=skip, limit=limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/scripts/{script_id}", response_model=VideoScript)
 async def get_script(script_id: str, db: Session = Depends(get_db)):
     """
-    Lấy thông tin chi tiết của một kịch bản video
+    Lấy thông tin chi tiết của một kịch bản video (không signed URL)
     """
     try:
         script = crud.get_script(db, script_id)
@@ -157,7 +157,7 @@ async def save_script(
     db: Session = Depends(get_db)
 ):
     """
-    Lưu script với user_id của người dùng hiện tại
+    Lưu script với user_id của người dùng hiện tại và upload ảnh lên cloud storage
     """
     try:
         # Kiểm tra script có tồn tại không
@@ -175,11 +175,102 @@ async def save_script(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         user_id = user.id
-
-        # Cập nhật creator_id cho script
-        updated_script = crud.update_script(db, script_id, {"creator_id": user_id})
-        # Cập nhật status thành completed
-        updated_script = crud.update_script(db, script_id, {"status": ScriptStatus.COMPLETED.value})
+        
+        # Upload ảnh lên cloud storage và cập nhật URLs
+        cover_image_url = None
+        
+        for scene in script.scenes:
+            for scene_image in scene.images:
+                if not scene_image.image_url:
+                    continue
+                
+                # Kiểm tra nếu URL đã là Google Cloud Storage URL
+                if scene_image.image_url.startswith('https://storage.googleapis.com/'):
+                    # Ảnh đã có URL cloud storage, chọn làm cover nếu chưa có
+                    if cover_image_url is None:
+                        cover_image_url = scene_image.image_url
+                    continue
+                
+                # Nếu là URL từ Replicate hoặc URL khác, tải về và upload lên cloud storage
+                if scene_image.image_url.startswith('http'):
+                    try:
+                        # Tải ảnh từ URL
+                        response = requests.get(scene_image.image_url, timeout=30)
+                        response.raise_for_status()
+                        
+                        # Tạo file tạm để lưu ảnh
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                            temp_file.write(response.content)
+                            temp_file_path = temp_file.name
+                        
+                        try:
+                            # Upload ảnh lên cloud storage
+                            with open(temp_file_path, 'rb') as image_file:
+                                # Tạo tên file duy nhất
+                                import uuid
+                                unique_filename = f"script-images/{script_id}/{uuid.uuid4()}.jpg"
+                                
+                                # Upload lên cloud storage
+                                from app.api.storage import upload_image_to_cloud
+                                cloud_url = await upload_image_to_cloud(image_file, unique_filename)
+                                
+                                # Cập nhật URL trong database
+                                scene_image.image_url = cloud_url
+                                db.commit()
+                                
+                                # Chọn ảnh đầu tiên làm ảnh bìa
+                                if cover_image_url is None:
+                                    cover_image_url = cloud_url
+                                    
+                        finally:
+                            # Xóa file tạm
+                            import os
+                            if os.path.exists(temp_file_path):
+                                os.unlink(temp_file_path)
+                                
+                    except Exception as e:
+                        print(f"Error uploading image from URL {scene_image.image_url}: {e}")
+                        # Tiếp tục với ảnh khác
+                        continue
+                
+                # Xử lý file local (nếu có)
+                elif os.path.exists(scene_image.image_url):
+                    try:
+                        # Upload ảnh lên cloud storage
+                        with open(scene_image.image_url, 'rb') as image_file:
+                            # Tạo tên file duy nhất
+                            import uuid
+                            file_extension = os.path.splitext(scene_image.image_url)[1]
+                            unique_filename = f"script-images/{script_id}/{uuid.uuid4()}{file_extension}"
+                            
+                            # Upload lên cloud storage
+                            from app.api.storage import upload_image_to_cloud
+                            cloud_url = await upload_image_to_cloud(image_file, unique_filename)
+                            
+                            # Cập nhật URL trong database
+                            scene_image.image_url = cloud_url
+                            db.commit()
+                            
+                            # Chọn ảnh đầu tiên làm ảnh bìa
+                            if cover_image_url is None:
+                                cover_image_url = cloud_url
+                                
+                    except Exception as e:
+                        print(f"Error uploading local image {scene_image.image_url}: {e}")
+                        # Tiếp tục với ảnh khác
+                        continue
+        
+        # Cập nhật creator_id và cover_image cho script sử dụng hàm update_script có sẵn
+        update_data = {
+            "creator_id": user_id,
+            "status": ScriptStatus.COMPLETED.value
+        }
+        
+        if cover_image_url:
+            update_data["cover_image"] = cover_image_url
+        
+        updated_script = crud.update_script(db, script_id, update_data)
+        
         return updated_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -279,5 +370,101 @@ async def update_video_url(
         })
 
         return updated_script
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/scripts/{script_id}/upload-images-from-urls", response_model=VideoScript)
+@require_auth()
+async def upload_images_from_urls(
+    request: Request,
+    script_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Upload tất cả ảnh từ URL (Replicate) lên Google Cloud Storage và cập nhật cover_image
+    """
+    try:
+        # Kiểm tra script có tồn tại không
+        script = crud.get_script(db, script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail="Script not found")
+
+        # Lấy user từ accessToken để kiểm tra quyền
+        username = request.state.user["sub"]
+        user = db.query(User).filter_by(username=username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Kiểm tra xem user có quyền cập nhật script này không
+        if script.creator_id and script.creator_id != user.id:
+            raise HTTPException(status_code=403, detail="You don't have permission to update this script")
+        
+        # Upload ảnh lên cloud storage và cập nhật URLs
+        cover_image_url = None
+        
+        for scene in script.scenes:
+            for scene_image in scene.images:
+                if not scene_image.image_url:
+                    continue
+                
+                # Kiểm tra nếu URL đã là Google Cloud Storage URL
+                if scene_image.image_url.startswith('https://storage.googleapis.com/'):
+                    # Ảnh đã có URL cloud storage, chọn làm cover nếu chưa có
+                    if cover_image_url is None:
+                        cover_image_url = scene_image.image_url
+                    continue
+                
+                # Nếu là URL từ Replicate hoặc URL khác, tải về và upload lên cloud storage
+                if scene_image.image_url.startswith('http'):
+                    try:
+                        # Tải ảnh từ URL
+                        response = requests.get(scene_image.image_url, timeout=30)
+                        response.raise_for_status()
+                        
+                        # Tạo file tạm để lưu ảnh
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                            temp_file.write(response.content)
+                            temp_file_path = temp_file.name
+                        
+                        try:
+                            # Upload ảnh lên cloud storage
+                            with open(temp_file_path, 'rb') as image_file:
+                                # Tạo tên file duy nhất
+                                import uuid
+                                unique_filename = f"script-images/{script_id}/{uuid.uuid4()}.jpg"
+                                
+                                # Upload lên cloud storage
+                                from app.api.storage import upload_image_to_cloud
+                                cloud_url = await upload_image_to_cloud(image_file, unique_filename)
+                                
+                                # Cập nhật URL trong database
+                                scene_image.image_url = cloud_url
+                                db.commit()
+                                
+                                # Chọn ảnh đầu tiên làm ảnh bìa
+                                if cover_image_url is None:
+                                    cover_image_url = cloud_url
+                                    
+                        finally:
+                            # Xóa file tạm
+                            if os.path.exists(temp_file_path):
+                                os.unlink(temp_file_path)
+                                
+                    except Exception as e:
+                        print(f"Error uploading image from URL {scene_image.image_url}: {e}")
+                        # Tiếp tục với ảnh khác
+                        continue
+        
+        # Cập nhật cover_image cho script
+        update_data = {}
+        if cover_image_url:
+            update_data["cover_image"] = cover_image_url
+        
+        if update_data:
+            updated_script = crud.update_script(db, script_id, update_data)
+            
+            return updated_script
+        
+        return script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 
