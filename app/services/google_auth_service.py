@@ -62,6 +62,7 @@ class GoogleAuthService:
                     "expires_in": token_data.get("expires_in", 3600),
                     "token_type": token_data.get("token_type", "Bearer")
                 }
+              
         except httpx.HTTPStatusError as e:
             error_detail = e.response.json() if e.response.content else str(e)
             raise HTTPException(

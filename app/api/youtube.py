@@ -135,7 +135,7 @@ def upload_video(
     
     if not google_access_token:
         raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
-    
+  
     temp_file_path = None
     try:
         if file is not None:
@@ -267,7 +267,6 @@ def refresh_google_token(request: Request):
     new_access_token = youtube_service.refresh_google_token(google_refresh_token)
     if not new_access_token:
         raise HTTPException(status_code=500, detail="Không thể refresh token")
-    
     return {"access_token": new_access_token}
 
 @router.get("/my/analytics/detailed")

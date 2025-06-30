@@ -26,9 +26,7 @@ class UpdateVideoUrlRequest(BaseModel):
     video_url: str
 
 @router.post("/generate", response_model=VideoScript)
-
 async def generate_video_script(
-
     create_request: CreateScriptRequest, 
     db: Session = Depends(get_db)
 ):
@@ -37,23 +35,14 @@ async def generate_video_script(
     """
     db_script = None  # Khởi tạo biến db_script
     try:
-
-
-
-
-
-
-
         # Tạo nội dung script bằng DeepSeek
         script = deepseek_service.generate_video_script(
             topic=create_request.topic,
             target_audience=create_request.target_audience,
             duration=create_request.duration
         )
-
         # Tạo script trong database với status DRAFT và creator_id = null
         db_script = crud.create_script(db, create_request)
-
         # Cập nhật thông tin script trong database (creator_id sẽ là null)
         crud.update_script(db, db_script.id, {
             "title": script.title,
@@ -243,7 +232,6 @@ async def save_script(
                             file_extension = os.path.splitext(scene_image.image_url)[1]
                             unique_filename = f"script-images/{script_id}/{uuid.uuid4()}{file_extension}"
                             
-                            # Upload lên cloud storage
                             from app.api.storage import upload_image_to_cloud
                             cloud_url = await upload_image_to_cloud(image_file, unique_filename)
                             
@@ -270,8 +258,8 @@ async def save_script(
             update_data["cover_image"] = cover_image_url
         
         updated_script = crud.update_script(db, script_id, update_data)
-        
         return updated_script
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

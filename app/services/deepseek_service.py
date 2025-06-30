@@ -129,10 +129,14 @@ class DeepSeekService:
                 "temperature": 0.7,
                 "max_tokens": 2000
             }
-
-
             content_response = self.session.post(self.api_url, headers=self.headers, json=content_payload, timeout=60)
 
+            # Kiểm tra response có rỗng không
+            if not content_response.text or content_response.text.strip() == "":
+                logger.error("OpenRouter returned empty response - likely API key issue")
+                logger.error("Falling back to mock data")
+                return self._get_mock_script(topic, target_audience, duration)
+            
             # Kiểm tra response có rỗng không
             if not content_response.text or content_response.text.strip() == "":
                 logger.error("OpenRouter returned empty response - likely API key issue")
