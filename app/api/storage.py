@@ -168,6 +168,68 @@ async def get_video_url(filename: str):
         logger.error(f"Error generating video URL: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate video URL: {str(e)}")
 
+@router.get("/get-image-url/{filename:path}", summary="Get signed URL for viewing image")
+async def get_image_url(filename: str):
+    """
+    Tạo signed URL để xem ảnh (nếu bucket không public).
+    """
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(filename)
+        
+        # Kiểm tra file có tồn tại không
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Image not found")
+        
+        # Tạo signed URL có hiệu lực 1 giờ
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(hours=1),
+            method="GET",
+        )
+        
+        return {"signed_url": signed_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating image URL: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate image URL: {str(e)}")
+
+async def get_signed_image_url(image_url: str):
+    """
+    Chuyển đổi Google Cloud Storage URL thành signed URL
+    """
+    try:
+        # Kiểm tra nếu là Google Cloud Storage URL
+        if not image_url.startswith('https://storage.googleapis.com/'):
+            return image_url
+        
+        # Trích xuất filename từ URL
+        filename = image_url.replace(f'https://storage.googleapis.com/{BUCKET_NAME}/', '')
+        
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(filename)
+        
+        # Kiểm tra file có tồn tại không
+        if not blob.exists():
+            return image_url  # Trả về URL gốc nếu không tìm thấy
+        
+        # Tạo signed URL có hiệu lực 1 giờ
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(hours=1),
+            method="GET",
+        )
+        
+        return signed_url
+        
+    except Exception as e:
+        logger.error(f"Error generating signed image URL: {e}")
+        return image_url  # Trả về URL gốc nếu có lỗi
+
 async def upload_image_to_cloud(image_file, filename: str):
     """
     Upload image file lên Google Cloud Storage và trả về public URL

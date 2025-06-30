@@ -94,7 +94,7 @@ class DeepSeekService:
     def generate_video_script(self, topic: str, target_audience: str, duration: int) -> VideoScript:
         try:
             logger.info(f"Generating video script for topic: {topic}")
-            
+
             if self.use_mock:
                 logger.info("Using mock data for testing")
                 return self._get_mock_script(topic, target_audience, duration)
@@ -129,8 +129,13 @@ class DeepSeekService:
                 "temperature": 0.7,
                 "max_tokens": 2000
             }
-
             content_response = self.session.post(self.api_url, headers=self.headers, json=content_payload, timeout=60)
+
+            # Kiểm tra response có rỗng không
+            if not content_response.text or content_response.text.strip() == "":
+                logger.error("OpenRouter returned empty response - likely API key issue")
+                logger.error("Falling back to mock data")
+                return self._get_mock_script(topic, target_audience, duration)
             
             # Kiểm tra response có rỗng không
             if not content_response.text or content_response.text.strip() == "":
@@ -209,7 +214,7 @@ class DeepSeekService:
 
             logger.info("Splitting content into scenes...")
             scenes_response = self.session.post(self.api_url, headers=self.headers, json=scenes_payload, timeout=60)
-            
+
             if scenes_response.status_code != 200:
                 logger.error(f"Scene generation failed: {scenes_response.text}")
                 raise ValueError(f"Failed to generate scenes: {scenes_response.text}")
@@ -224,7 +229,7 @@ class DeepSeekService:
                 if json_start >= 0 and json_end > json_start:
                     json_str = scenes_data[json_start:json_end]
                     data = json.loads(json_str)
-                    
+
                     # Tạo danh sách Scene
                     scenes = []
                     for scene_data in data.get('scenes', []):
@@ -267,7 +272,7 @@ class DeepSeekService:
         """Cải thiện kịch bản với các đề xuất chi tiết hơn"""
         try:
             logger.info(f"Enhancing video script: {script.title}")
-            
+
             if self.use_mock:
                 logger.info("Using mock data for testing")
                 # Thêm một số chi tiết vào script mẫu
@@ -307,7 +312,7 @@ class DeepSeekService:
 
             logger.debug(f"Sending enhancement request to OpenRouter API")
             response = self.session.post(self.api_url, headers=self.headers, json=payload, timeout=60)
-            
+
             if response.status_code == 401:
                 logger.error("Unauthorized: Invalid API key")
                 raise ValueError("Invalid OpenRouter API key. Please check your API key in .env file")
@@ -315,7 +320,7 @@ class DeepSeekService:
                 logger.error(f"API request failed with status code: {response.status_code}")
                 logger.error(f"Response content: {response.text}")
                 raise ValueError(f"OpenRouter API request failed: {response.text}")
-                
+
             result = response.json()
             logger.info("Successfully received enhancement response from OpenRouter API")
 
@@ -327,12 +332,12 @@ class DeepSeekService:
                 if json_start >= 0 and json_end > json_start:
                     json_str = script_data[json_start:json_end]
                     data = json.loads(json_str)
-                    
+
                     # Cập nhật script với dữ liệu mới
                     script.title = data.get('title', script.title)
                     script.description = data.get('description', script.description)
                     script.total_duration = data.get('total_duration', script.total_duration)
-                    
+
                     # Cập nhật scenes
                     if 'scenes' in data:
                         scenes = []
@@ -347,7 +352,7 @@ class DeepSeekService:
                             )
                             scenes.append(scene)
                         script.scenes = scenes
-                    
+
                     logger.info(f"Successfully enhanced video script with {len(script.scenes)} scenes")
                     return script
                 else:
@@ -363,4 +368,3 @@ class DeepSeekService:
             raise ValueError(f"Failed to connect to OpenRouter API: {str(e)}")
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
-            raise 

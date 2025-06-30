@@ -18,7 +18,7 @@ class AuthMiddleware:
             # Lấy tokens từ cookies
             refresh_token = request.cookies.get("refresh_token")
             access_token = request.cookies.get("access_token")
-            
+
             if not refresh_token and not access_token:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,7 +75,7 @@ class AuthMiddleware:
                             status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Refresh token không hợp lệ hoặc đã hết hạn"
                         )
-                    
+
                     # Lấy thông tin user từ refresh token
                     user = db_token.user
                     user_payload = {
@@ -84,18 +84,18 @@ class AuthMiddleware:
                         "type": "refresh"
                     }
                     request.state.user = user_payload
-                    
+
                     # Kiểm tra role nếu có yêu cầu
                     if self.required_roles and user.role not in self.required_roles:
                         raise HTTPException(
                             status_code=status.HTTP_403_FORBIDDEN,
                             detail="Không có quyền truy cập"
                         )
-                    
+
                     # Forward request tới API
                     response = await call_next(request)
                     return response
-                    
+
                 except HTTPException as e:
                     raise e
                 except Exception as e:
@@ -129,7 +129,7 @@ def require_auth(required_roles: Optional[List[str]] = None):
                     if isinstance(arg, Request):
                         request = arg
                         break
-            
+
             if not request:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -139,4 +139,4 @@ def require_auth(required_roles: Optional[List[str]] = None):
             middleware = AuthMiddleware(required_roles)
             return await middleware(request, lambda r: func(*args, **kwargs))
         return wrapper
-    return decorator 
+    return decorator

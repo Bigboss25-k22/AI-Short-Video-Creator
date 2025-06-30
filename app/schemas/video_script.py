@@ -34,6 +34,7 @@ class VideoScript(BaseModel):
     target_audience: str
     total_duration: int  # Tổng thời lượng tính bằng giây
     video_url: Optional[str] = None  # URL video sau khi upload lên cloud storage
+    cover_image: Optional[str] = None  # URL ảnh bìa của script
     scenes: List[Scene]
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

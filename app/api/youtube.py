@@ -26,6 +26,98 @@ def get_channel_videos(
         raise HTTPException(status_code=404, detail="Không tìm thấy video nào cho kênh này hoặc có lỗi xảy ra.")
     return result
 
+@router.get("/analytics")
+def get_channel_analytics(
+    request: Request,
+    channel_id: str = Query(..., description="YouTube channel ID"),
+    time_range: str = Query("7d", description="Khoảng thời gian: 7d, 30d, 90d")
+):
+    """
+    Lấy dữ liệu analytics của kênh YouTube
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        analytics = youtube_service.get_channel_analytics(google_access_token, channel_id, time_range)
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được dữ liệu analytics: {e}")
+
+@router.get("/my/analytics")
+def get_my_channel_analytics(
+    request: Request,
+    time_range: str = Query("7d", description="Khoảng thời gian: 7d, 30d, 90d")
+):
+    """
+    Lấy dữ liệu analytics của kênh YouTube người dùng hiện tại
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        analytics = youtube_service.get_my_channel_analytics(google_access_token, time_range)
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được dữ liệu analytics: {e}")
+
+@router.get("/video/analytics")
+def get_video_analytics(
+    request: Request,
+    video_id: str = Query(..., description="YouTube video ID"),
+    time_range: str = Query("7d", description="Khoảng thời gian: 7d, 30d, 90d")
+):
+    """
+    Lấy dữ liệu analytics của video cụ thể
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        analytics = youtube_service.get_video_analytics(google_access_token, video_id, time_range)
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được dữ liệu analytics video: {e}")
+
+@router.get("/demographics")
+def get_channel_demographics(
+    request: Request,
+    channel_id: str = Query(..., description="YouTube channel ID")
+):
+    """
+    Lấy dữ liệu demographics của kênh YouTube
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        demographics = youtube_service.get_channel_demographics(google_access_token, channel_id)
+        return demographics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được dữ liệu demographics: {e}")
+
+@router.get("/traffic-sources")
+def get_channel_traffic_sources(
+    request: Request,
+    channel_id: str = Query(..., description="YouTube channel ID")
+):
+    """
+    Lấy dữ liệu traffic sources của kênh YouTube
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        traffic_sources = youtube_service.get_channel_traffic_sources(google_access_token, channel_id)
+        return traffic_sources
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được dữ liệu traffic sources: {e}")
+
 @router.post("/upload")
 def upload_video(
     request: Request,
@@ -175,5 +267,38 @@ def refresh_google_token(request: Request):
     new_access_token = youtube_service.refresh_google_token(google_refresh_token)
     if not new_access_token:
         raise HTTPException(status_code=500, detail="Không thể refresh token")
+    return {"access_token": new_access_token}
+
+@router.get("/my/analytics/detailed")
+def get_my_channel_analytics_detailed(
+    request: Request,
+    time_range: str = Query("7d", description="Khoảng thời gian: 7d, 30d, 90d")
+):
+    """
+    Lấy dữ liệu analytics chi tiết của kênh YouTube người dùng hiện tại
+    Bao gồm views, likes, comments, watch time, subscribers
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
     
-    return {"access_token": new_access_token} 
+    try:
+        analytics = youtube_service.get_my_channel_analytics_detailed(google_access_token, time_range)
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được dữ liệu analytics chi tiết: {e}")
+
+@router.get("/my/analytics/summary")
+def get_my_channel_analytics_summary(request: Request):
+    """
+    Lấy tổng quan analytics của kênh YouTube người dùng hiện tại
+    """
+    google_access_token = request.cookies.get("google_access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập Google hoặc thiếu Google access token")
+    
+    try:
+        summary = youtube_service.get_my_channel_analytics_summary(google_access_token)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Không lấy được tổng quan analytics: {e}") 
