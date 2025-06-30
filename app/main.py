@@ -5,6 +5,9 @@ from app.core.config import get_settings
 from app.common.exception.exception_handler import register_exception
 from app.core.logging import setup_logging
 import uvicorn
+import asyncio
+import signal
+import sys
 
 # Thiết lập logging
 setup_logging()
@@ -38,11 +41,32 @@ async def root():
 # Đăng ký exception handler
 register_exception(app)
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    print(f"\nReceived signal {signum}. Shutting down gracefully...")
+    sys.exit(0)
+
 if __name__ == "__main__":
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Configure asyncio to handle cancellation better
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+    try:
+        uvicorn.run(
+            "app.main:app",
+            host="0.0.0.0",
+            port=8000,
+            reload=False,  # Disable reload to avoid a2wsgi import issue
+            log_level="info",
+            access_log=False  # Disable access logs to reduce noise
+        )
+    except KeyboardInterrupt:
+        print("\nServer shutdown gracefully")
+    except Exception as e:
+        print(f"Server error: {e}")
+    finally:
+        print("Server stopped")

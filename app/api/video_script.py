@@ -25,9 +25,9 @@ class UpdateVideoUrlRequest(BaseModel):
     video_url: str
 
 @router.post("/generate", response_model=VideoScript)
-@require_auth()
+
 async def generate_video_script(
-    request: Request,
+
     create_request: CreateScriptRequest, 
     db: Session = Depends(get_db)
 ):
@@ -36,32 +36,32 @@ async def generate_video_script(
     """
     db_script = None  # Khởi tạo biến db_script
     try:
-        # Lấy user từ accessToken
-        username = request.state.user["sub"]
-        user = db.query(User).filter_by(username=username).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        user_id = user.id
-        
+
+
+
+
+
+
+
         # Tạo nội dung script bằng DeepSeek
         script = deepseek_service.generate_video_script(
             topic=create_request.topic,
             target_audience=create_request.target_audience,
             duration=create_request.duration
         )
-        
-        # Tạo script trong database với status DRAFT và creator_id
+
+        # Tạo script trong database với status DRAFT và creator_id = null
         db_script = crud.create_script(db, create_request)
-        
-        # Cập nhật thông tin script trong database bao gồm creator_id
+
+        # Cập nhật thông tin script trong database (creator_id sẽ là null)
         crud.update_script(db, db_script.id, {
             "title": script.title,
             "description": script.description,
             "total_duration": script.total_duration,
-            "creator_id": user_id,  # Lưu creator_id ngay khi tạo
+            "creator_id": None,  # Để null, sẽ được cập nhật khi user lưu
             "status": ScriptStatus.DRAFT.value  
         })
-        
+
         # Tạo các scene trong database
         for scene in script.scenes:
             # Tạo scene với visual_elements là mô tả chi tiết
@@ -75,7 +75,7 @@ async def generate_video_script(
                 "image_status": MediaStatus.PENDING.value,
                 "voice_status": MediaStatus.PENDING.value
             })
-        
+
         # Lấy script đã lưu từ database để trả về
         saved_script = crud.get_script(db, db_script.id)
         return saved_script
@@ -164,18 +164,18 @@ async def save_script(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
+
         # Kiểm tra script đã có creator_id chưa
         if script.creator_id:
             raise HTTPException(status_code=400, detail="Script already has a creator")
-        
+
         # Lấy user từ accessToken
         username = request.state.user["sub"]
         user = db.query(User).filter_by(username=username).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         user_id = user.id
-        
+
         # Cập nhật creator_id cho script
         updated_script = crud.update_script(db, script_id, {"creator_id": user_id})
         # Cập nhật status thành completed
@@ -200,14 +200,14 @@ async def delete_script(script_id: str, db: Session = Depends(get_db)):
             # Xóa tất cả hình ảnh của scene
             for image in scene.images:
                 db.delete(image)
-            
+
             # Xóa tất cả voice audio của scene
             for voice in scene.voice_audios:
                 db.delete(voice)
-            
+
             # Xóa scene
             db.delete(scene)
-        
+
         # Xóa script
         db.delete(script)
         db.commit()
@@ -231,11 +231,11 @@ async def delete_scene(scene_id: str, db: Session = Depends(get_db)):
         # Xóa tất cả hình ảnh của scene
         for image in scene.images:
             db.delete(image)
-        
+
         # Xóa tất cả voice audio của scene
         for voice in scene.voice_audios:
             db.delete(voice)
-        
+
         # Xóa scene
         db.delete(scene)
         db.commit()
@@ -261,23 +261,23 @@ async def update_video_url(
         script = crud.get_script(db, script_id)
         if not script:
             raise HTTPException(status_code=404, detail="Script not found")
-        
+
         # Lấy user từ accessToken để kiểm tra quyền
         username = request.state.user["sub"]
         user = db.query(User).filter_by(username=username).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # Kiểm tra xem user có quyền cập nhật script này không
         if script.creator_id and script.creator_id != user.id:
             raise HTTPException(status_code=403, detail="You don't have permission to update this script")
-        
+
         # Cập nhật video URL
         updated_script = crud.update_script(db, script_id, {
             "video_url": video_url_request.video_url,
             "status": ScriptStatus.COMPLETED.value  # Cập nhật status thành completed khi có video
         })
-        
+
         return updated_script
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

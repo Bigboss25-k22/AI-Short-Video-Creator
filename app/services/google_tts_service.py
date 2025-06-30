@@ -6,7 +6,17 @@ from typing import List
 import tempfile
 from app.core.config import get_settings
 import base64
+from google.oauth2 import service_account
+import warnings
 
+# Suppress Google API Client cache warning
+warnings.filterwarnings("ignore", message="file_cache is only supported with oauth2client<4.0.0")
+
+# Cấu hình logging với UTF-8
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 class GoogleTTSService:
@@ -16,26 +26,26 @@ class GoogleTTSService:
             # Log thông tin về credentials
             creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
             logger.info(f"Looking for credentials at: {creds_path}")
-            
+
             if not creds_path:
                 raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not set in .env file")
-            
+
             if not os.path.exists(creds_path):
                 raise ValueError(f"Credentials file not found at: {creds_path}")
-            
+
             # Kiểm tra quyền truy cập file
             if not os.access(creds_path, os.R_OK):
                 raise ValueError(f"Cannot read credentials file at: {creds_path}")
-            
+
             logger.info("Credentials file found and readable")
-            
+
             # Thiết lập biến môi trường
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
-            
+
             # Khởi tạo client
             self.client = texttospeech.TextToSpeechClient()
             logger.info("GoogleTTSService initialized successfully")
-            
+
         except DefaultCredentialsError as e:
             logger.error(f"Google Cloud credentials error: {str(e)}")
             raise ValueError(
@@ -52,12 +62,12 @@ class GoogleTTSService:
     # def generate_voice(self, text: str, voice_id: str = "vi-VN-Wavenet-A", speed: float = 1.0) -> str:
     #     """
     #     Tạo file audio từ text sử dụng Google TTS
-        
+
     #     Args:
     #         text: Văn bản cần chuyển thành giọng nói
     #         voice_id: ID của giọng đọc (mặc định: vi-VN-Wavenet-A)
     #         speed: Tốc độ đọc (0.25 - 4.0)
-            
+
     #     Returns:
     #         str: Đường dẫn đến file audio
     #     """
@@ -73,7 +83,7 @@ class GoogleTTSService:
     #         voice_parts = voice_id.split("-")
     #         if len(voice_parts) < 2:
     #             raise ValueError(f"Invalid voice_id format: {voice_id}. Expected format: language-region-voice-type")
-            
+
     #         language_code = f"{voice_parts[0]}-{voice_parts[1]}"
     #         voice = texttospeech.VoiceSelectionParams(
     #             language_code=language_code,
@@ -106,7 +116,7 @@ class GoogleTTSService:
     #     except Exception as e:
     #         logger.error(f"Error generating voice: {str(e)}")
     #         raise
-    
+
     def generate_voice(self, text: str, voice_id: str = "vi-VN-Wavenet-A", speed: float = 1.0) -> str:
         """
         Tạo nội dung audio base64 từ văn bản sử dụng Google Text-to-Speech.
@@ -163,7 +173,7 @@ class GoogleTTSService:
         except Exception as e:
             logger.error(f"Error generating voice: {str(e)}")
             raise
-        
+
     def generate_voices_for_script(self, script_texts: List[str], voice_id: str = "vi-VN-Wavenet-A", speed: float = 1.0) -> List[str]:
         """
         Trả về danh sách audio base64 string từ các đoạn văn bản.
@@ -208,7 +218,7 @@ class GoogleTTSService:
             voice_parts = voice_id.split("-")
             if len(voice_parts) < 2:
                 raise ValueError(f"Invalid voice_id format: {voice_id}. Expected format: language-region-voice-type")
-            
+
             language_code = f"{voice_parts[0]}-{voice_parts[1]}"
             voice = texttospeech.VoiceSelectionParams(
                 language_code=language_code,

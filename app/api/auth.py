@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from fastapi.responses import RedirectResponse, JSONResponse
 
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 router = APIRouter(prefix="", tags=["auth"])
 google_auth_service = GoogleAuthService()
@@ -79,6 +80,7 @@ async def login(
     save_refresh_token(db, refresh_token, user.id, expires_at)
 
     # Set token vào cookie HTTPOnly và redirect về home FE
+
     # response = RedirectResponse(url="http://localhost:3000/explore")
     response = JSONResponse(content={"msg": "Login successful"})
 
@@ -98,7 +100,6 @@ async def login(
     )
     return response
 
-
 @router.post("/refresh")
 async def refresh_token(
     body: RefreshTokenRequest,
@@ -115,21 +116,21 @@ async def refresh_token(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token không hợp lệ hoặc đã hết hạn"
             )
-        
+
         # Lấy user từ refresh token
         user = db_token.user
-        
+
         # Tạo access token mới
         new_access_token = create_access_token({
             "sub": user.username,
             "role": user.role
         })
-        
+
         return {
             "access_token": new_access_token,
             "token_type": "bearer"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -137,7 +138,6 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Không thể refresh token"
         )
-
 
 # @router.post("/logout")
 # async def logout(
@@ -162,7 +162,6 @@ async def logout(
     response.delete_cookie(key="refresh_token")
     return response
 
-
 @router.get("/google/login")
 async def google_login():
     """Tạo URL đăng nhập Google OAuth2"""
@@ -175,7 +174,6 @@ async def google_callback(
     code: str = Query(..., description="Authorization code from Google"),
     db: Session = Depends(get_db)
 ):
-
     try:
         # Lấy tokens từ Google
         google_tokens = await google_auth_service.get_access_token(code)
@@ -188,13 +186,13 @@ async def google_callback(
 
         # Lưu Google tokens vào user (có thể lưu vào database hoặc session)
         # Ở đây chúng ta sẽ lưu vào cookie để sử dụng cho YouTube API
-        
+
         # Tạo tokens cho hệ thống nội bộ
         tokens = google_auth_service.create_tokens(db, user)
 
         # Redirect về trang home của frontend và set token vào cookie HTTPOnly
         response = RedirectResponse(url="http://localhost:3000/explore")
-        
+
         # Set system tokens
         response.set_cookie(
             key="access_token",
@@ -210,7 +208,6 @@ async def google_callback(
             secure=False,  # Để True nếu dùng HTTPS ở production
             samesite="lax"
         )
-        
         # Set Google tokens cho YouTube API
         response.set_cookie(
             key="google_access_token",
@@ -229,8 +226,9 @@ async def google_callback(
             )
         
         return response
+        
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=f"Google authentication failed: {str(e)}"
         )
