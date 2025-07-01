@@ -78,7 +78,7 @@ Tạo file `.env` trong thư mục `app` với các biến sau:
 DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
 # JWT
-SECRET_KEY=your_secret_key
+SECRET_KEY=your_secret_key 
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=10080
