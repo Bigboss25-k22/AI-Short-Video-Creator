@@ -1,17 +1,18 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.video_script import VideoScript, Scene, VoiceAudio, SceneImage, ScriptStatus
 from app.schemas.video_script import CreateScriptRequest
 from typing import List, Dict, Any, Optional
 import uuid
 
-def create_script(db: Session, request: CreateScriptRequest) -> VideoScript:
+def create_script(db: Session, request: CreateScriptRequest, creator_id: Optional[str] = None) -> VideoScript:
     """Tạo mới một kịch bản video"""
     db_script = VideoScript(
         title=request.topic,
         description="",
         target_audience=request.target_audience,
         total_duration=request.duration,
-        status=ScriptStatus.DRAFT.value  # Sử dụng giá trị của enum
+        status=ScriptStatus.DRAFT.value,  # Sử dụng giá trị của enum
+        creator_id=creator_id
     )
     db.add(db_script)
     db.commit()
@@ -20,7 +21,10 @@ def create_script(db: Session, request: CreateScriptRequest) -> VideoScript:
 
 def get_script(db: Session, script_id: str) -> VideoScript:
     """Lấy thông tin một kịch bản video"""
-    return db.query(VideoScript).filter(VideoScript.id == script_id).first()
+    return db.query(VideoScript)\
+        .options(joinedload(VideoScript.scenes))\
+        .filter(VideoScript.id == script_id)\
+        .first()
 
 def get_scripts(db: Session, skip: int = 0, limit: int = 100) -> List[VideoScript]:
     """Lấy danh sách các kịch bản video"""

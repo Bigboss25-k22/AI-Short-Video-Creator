@@ -13,6 +13,9 @@ from pydantic import BaseModel
 from app.models.user import User
 from app.middleware.auth import require_auth
 import requests
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+import json
 
 router = APIRouter()
 deepseek_service = DeepSeekService()
@@ -26,7 +29,9 @@ class UpdateVideoUrlRequest(BaseModel):
     video_url: str
 
 @router.post("/generate", response_model=VideoScript)
+@require_auth()
 async def generate_video_script(
+    request: Request,
     create_request: CreateScriptRequest, 
     db: Session = Depends(get_db)
 ):
@@ -35,24 +40,39 @@ async def generate_video_script(
     """
     db_script = None  # Khởi tạo biến db_script
     try:
+        # Lấy user từ accessToken
+        username = request.state.user["sub"]
+        user = db.query(User).filter_by(username=username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_id = user.id
+        
         # Tạo nội dung script bằng DeepSeek
         script = deepseek_service.generate_video_script(
             topic=create_request.topic,
             target_audience=create_request.target_audience,
             duration=create_request.duration
         )
-        # Tạo script trong database với status DRAFT và creator_id = null
-        db_script = crud.create_script(db, create_request)
-        # Cập nhật thông tin script trong database (creator_id sẽ là null)
+        print(f"[API] DeepSeek script created successfully with {len(script.scenes)} scenes")
+        
+        # Tạo script trong database với status DRAFT và creator_id = user_id
+        print(f"[API] Creating script in database with creator_id: {user_id}")
+        db_script = crud.create_script(db, create_request, creator_id=user_id)
+        print(f"[API] Script created in database with ID: {db_script.id}")
+        
+        # Cập nhật thông tin script trong database (creator_id sẽ là user_id)
+        print(f"[API] Updating script with DeepSeek content")
         crud.update_script(db, db_script.id, {
             "title": script.title,
             "description": script.description,
             "total_duration": script.total_duration,
-            "creator_id": None,  # Để null, sẽ được cập nhật khi user lưu
+            "creator_id": user_id,  # Gán user_id
             "status": ScriptStatus.DRAFT.value  
         })
+        print(f"[API] Script updated successfully")
 
         # Tạo các scene trong database
+        print(f"[API] Creating {len(script.scenes)} scenes in database")
         for scene in script.scenes:
             # Tạo scene với visual_elements là mô tả chi tiết
             db_scene = crud.create_scene(db, db_script.id, {
@@ -65,11 +85,16 @@ async def generate_video_script(
                 "image_status": MediaStatus.PENDING.value,
                 "voice_status": MediaStatus.PENDING.value
             })
+            print(f"[API] Scene {scene.scene_number} created successfully")
 
         # Lấy script đã lưu từ database để trả về
         saved_script = crud.get_script(db, db_script.id)
         return saved_script
     except Exception as e:
+        print(f"[API][ERROR] Exception occurred: {str(e)}")
+        print(f"[API][ERROR] Exception type: {type(e).__name__}")
+        import traceback
+        print(f"[API][ERROR] Traceback: {traceback.format_exc()}")
         # Nếu có lỗi, cập nhật status thành FAILED
         if db_script:
             crud.update_script(db, db_script.id, {"status": ScriptStatus.FAILED.value})
