@@ -84,108 +84,136 @@ async def generate_images_for_script(
     """
     Tạo hình ảnh cho tất cả các scene trong script và trả về tất cả hình ảnh
     """
-    try:
-        # Lấy script từ database
-        script = get_script(db, script_id)
-        if not script:
-            raise HTTPException(status_code=404, detail="Script not found")
-        
-        print(f"Found script: {script.id}")
-
-        # Lấy tất cả scenes của script
-        scenes = script.scenes  # Sử dụng relationship trực tiếp
-        if not scenes:
-            raise HTTPException(status_code=404, detail="No scenes found for this script")
-        
-        print(f"Found {len(scenes)} scenes")
-
-        # Tạo hình ảnh cho từng scene
-        generated_images = []
-        for scene in scenes:
-            print(f"Processing scene {scene.scene_number}")
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            # Lấy script từ database
+            script = get_script(db, script_id)
+            if not script:
+                raise HTTPException(status_code=404, detail="Script not found")
             
-            # Kiểm tra xem scene đã có hình ảnh chưa
-            if not scene.images:
-                print(f"Scene {scene.scene_number} has no images, generating...")
+            print(f"Found script: {script.id}")
+
+            # Lấy tất cả scenes của script
+            scenes = script.scenes  # Sử dụng relationship trực tiếp
+            if not scenes:
+                raise HTTPException(status_code=404, detail="No scenes found for this script")
+            
+            print(f"Found {len(scenes)} scenes")
+
+            # Tạo hình ảnh cho từng scene
+            generated_images = []
+            for scene in scenes:
+                print(f"Processing scene {scene.scene_number}")
                 
-                # Cập nhật trạng thái scene thành processing
-                scene.image_status = MediaStatus.PROCESSING.value
-                db.commit()
-
-                # Sử dụng visual_elements của scene làm prompt
-                prompt = scene.visual_elements
-                if not prompt:
-                    print(f"Scene {scene.scene_number} has no visual_elements")
-                    scene.image_status = MediaStatus.FAILED.value
+                # Kiểm tra xem scene đã có hình ảnh chưa
+                if not scene.images:
+                    print(f"Scene {scene.scene_number} has no images, generating...")
+                    
+                    # Cập nhật trạng thái scene thành processing
+                    scene.image_status = MediaStatus.PROCESSING.value
                     db.commit()
-                    continue  # Bỏ qua scene không có visual_elements
 
-                try:
-                    print(f"Generating image for scene {scene.scene_number} with prompt: {prompt}")
-                    # Tạo hình ảnh từ prompt
-                    image_url = image_service.generate_image(prompt)
-                    if not image_url:
-                        print(f"Failed to generate image for scene {scene.scene_number}")
+                    # Sử dụng visual_elements của scene làm prompt
+                    prompt = scene.visual_elements
+                    if not prompt:
+                        print(f"Scene {scene.scene_number} has no visual_elements")
                         scene.image_status = MediaStatus.FAILED.value
                         db.commit()
-                        continue  # Bỏ qua nếu tạo hình ảnh thất bại
+                        continue  # Bỏ qua scene không có visual_elements
 
-                    print(f"Successfully generated image for scene {scene.scene_number}")
-                    # Tạo bản ghi SceneImage mới
-                    scene_image = SceneImage(
-                        scene_id=scene.id,
-                        image_url=image_url,
-                        prompt=prompt,
-                        width=1024,  # Giá trị mặc định
-                        height=768,   # Giá trị mặc định
-                        status=MediaStatus.COMPLETED.value
-                    )
-                    db.add(scene_image)
-                    
-                    # Cập nhật trạng thái scene thành completed
-                    scene.image_status = MediaStatus.COMPLETED.value
-                    generated_images.append({
-                        "id": scene_image.id,
-                        "scene_id": scene_image.scene_id,
-                        "scene_number": scene.scene_number,
-                        "image_url": scene_image.image_url,
-                        "prompt": scene_image.prompt,
-                        "status": scene_image.status
-                    })
-                except Exception as e:
-                    print(f"Error generating image for scene {scene.scene_number}: {str(e)}")
-                    scene.image_status = MediaStatus.FAILED.value
-                    db.commit()
-                    continue
+                    try:
+                        print(f"Generating image for scene {scene.scene_number} with prompt: {prompt}")
+                        # Tạo hình ảnh từ prompt
+                        image_url = image_service.generate_image(prompt)
+                        if not image_url:
+                            print(f"Failed to generate image for scene {scene.scene_number}")
+                            scene.image_status = MediaStatus.FAILED.value
+                            db.commit()
+                            continue  # Bỏ qua nếu tạo hình ảnh thất bại
+
+                        print(f"Successfully generated image for scene {scene.scene_number}")
+                        # Tạo bản ghi SceneImage mới
+                        scene_image = SceneImage(
+                            scene_id=scene.id,
+                            image_url=image_url,
+                            prompt=prompt,
+                            width=1024,  # Giá trị mặc định
+                            height=768,   # Giá trị mặc định
+                            status=MediaStatus.COMPLETED.value
+                        )
+                        db.add(scene_image)
+                        
+                        # Cập nhật trạng thái scene thành completed
+                        scene.image_status = MediaStatus.COMPLETED.value
+                        generated_images.append({
+                            "id": scene_image.id,
+                            "scene_id": scene_image.scene_id,
+                            "scene_number": scene.scene_number,
+                            "image_url": scene_image.image_url,
+                            "prompt": scene_image.prompt,
+                            "status": scene_image.status
+                        })
+                    except Exception as e:
+                        print(f"Error generating image for scene {scene.scene_number}: {str(e)}")
+                        scene.image_status = MediaStatus.FAILED.value
+                        db.commit()
+                        continue
+                else:
+                    print(f"Scene {scene.scene_number} already has images")
+                    # Thêm tất cả hình ảnh hiện có của scene vào kết quả
+                    for image in scene.images:
+                        generated_images.append({
+                            "id": image.id,
+                            "scene_id": image.scene_id,
+                            "scene_number": scene.scene_number,
+                            "image_url": image.image_url,
+                            "prompt": image.prompt,
+                            "status": image.status
+                        })
+
+            db.commit()
+            
+            # Kiểm tra xem tất cả scenes đã hoàn thành chưa
+            all_completed = all(scene.image_status == MediaStatus.COMPLETED.value for scene in scenes)
+            if all_completed:
+                script.status = ScriptStatus.COMPLETED.value
             else:
-                print(f"Scene {scene.scene_number} already has images")
-                # Thêm tất cả hình ảnh hiện có của scene vào kết quả
-                for image in scene.images:
-                    generated_images.append({
-                        "id": image.id,
-                        "scene_id": image.scene_id,
-                        "scene_number": scene.scene_number,
-                        "image_url": image.image_url,
-                        "prompt": image.prompt,
-                        "status": image.status
-                    })
+                script.status = ScriptStatus.FAILED.value
+            db.commit()
 
-        db.commit()
+            print(f"Returning {len(generated_images)} images")
+            return generated_images
+            
+        except Exception as e:
+                print(f"Error in generate_images_for_script (attempt {retry_count + 1}/{max_retries}): {str(e)}")
+                
+                # Kiểm tra xem có phải lỗi database connection không
+                error_str = str(e).lower()
+                if any(keyword in error_str for keyword in ['ssl', 'connection', 'database', 'psycopg2']):
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        print(f"Database connection error detected. Retrying in 2 seconds... (attempt {retry_count + 1}/{max_retries})")
+                        import time
+                        time.sleep(2)  # Đợi 2 giây trước khi retry
+                        continue
+                    else:
+                        print("Max retries reached for database connection")
+                        db.rollback()
+                        raise HTTPException(
+                            status_code=500, 
+                            detail="Database connection error after multiple retries. Please try again later."
+                        )
+                else:
+                    # Nếu không phải lỗi database, không retry
+                    db.rollback()
+                    raise HTTPException(status_code=500, detail=str(e))
         
-        # Kiểm tra xem tất cả scenes đã hoàn thành chưa
-        all_completed = all(scene.image_status == MediaStatus.COMPLETED.value for scene in scenes)
-        if all_completed:
-            script.status = ScriptStatus.COMPLETED.value
-        else:
-            script.status = ScriptStatus.FAILED.value
-        db.commit()
-
-        print(f"Returning {len(generated_images)} images")
-        return generated_images
-    except Exception as e:
-        print(f"Error in generate_images_for_script: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    # Nếu đến đây mà vẫn chưa thành công
+    db.rollback()
+    raise HTTPException(status_code=500, detail="Failed to generate images after multiple attempts")
 
 @router.put("/scene-images/{image_id}", response_model=ImageGenerationResponse)
 async def update_scene_image(
