@@ -216,124 +216,84 @@ class YouTubeService:
 
     def get_channel_analytics(self, access_token: str, channel_id: str, time_range: str = '7d'):
         """
-        Lấy dữ liệu analytics thực từ YouTube Analytics API
+        Lấy dữ liệu analytics thực từ YouTube Analytics API (chỉ views và subscribers)
         """
         try:
             credentials = self.create_credentials(access_token)
-            
-            # Sử dụng YouTube Analytics API
-            try:
-                youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
-                
-                # Tính toán ngày bắt đầu dựa trên time_range
-                end_date = datetime.now().date()
-                if time_range == '7d':
-                    start_date = end_date - timedelta(days=7)
-                elif time_range == '30d':
-                    start_date = end_date - timedelta(days=30)
-                elif time_range == '90d':
-                    start_date = end_date - timedelta(days=90)
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
+
+            end_date = datetime.now().date() - timedelta(days=1)
+            if time_range == '7d':
+                start_date = end_date - timedelta(days=7)
+            elif time_range == '30d':
+                start_date = end_date - timedelta(days=30)
+            elif time_range == '90d':
+                start_date = end_date - timedelta(days=90)
+            else:
+                start_date = end_date - timedelta(days=7)
+
+            # Gọi API chỉ với metrics hợp lệ - thêm subscribersLost
+            logger.info(f"Querying YouTube Analytics for channel {channel_id}, period {start_date} to {end_date}")
+            response = youtube_analytics.reports().query(
+                ids=f'channel=={channel_id}',
+                startDate=start_date.isoformat(),
+                endDate=end_date.isoformat(),
+                metrics='views,subscribersGained,subscribersLost',
+                dimensions='day',
+                sort='day'
+            ).execute()
+
+            logger.info(f"YouTube Analytics response: {len(response.get('rows', []))} rows")
+            if response.get('rows'):
+                logger.info(f"Sample row: {response['rows'][0] if response['rows'] else 'None'}")
+
+            # Mapping dữ liệu trả về với views, subscribers gained và lost
+            analytics_data = []
+            headers = [h['name'] for h in response.get('columnHeaders', [])]
+            for row in response.get('rows', []):
+                row_dict = dict(zip(headers, row))
+                # Format ngày theo chuẩn MM/DD để hiển thị trên chart
+                date_str = row_dict.get('day', '')
+                if date_str:
+                    try:
+                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                        formatted_date = date_obj.strftime('%m/%d')
+                    except:
+                        formatted_date = date_str
                 else:
-                    start_date = end_date - timedelta(days=7)
+                    formatted_date = ''
                 
-                # Lấy dữ liệu views
-                views_response = youtube_analytics.reports().query(
-                    ids=f'channel=={channel_id}',
-                    startDate=start_date.isoformat(),
-                    endDate=end_date.isoformat(),
-                    metrics='views',
-                    dimensions='day'
-                ).execute()
-                
-                # Lấy dữ liệu subscribers
-                subscribers_response = youtube_analytics.reports().query(
-                    ids=f'channel=={channel_id}',
-                    startDate=start_date.isoformat(),
-                    endDate=end_date.isoformat(),
-                    metrics='subscribersGained',
-                    dimensions='day'
-                ).execute()
-                
-                # Lấy dữ liệu likes
-                likes_response = youtube_analytics.reports().query(
-                    ids=f'channel=={channel_id}',
-                    startDate=start_date.isoformat(),
-                    endDate=end_date.isoformat(),
-                    metrics='likes',
-                    dimensions='day'
-                ).execute()
-                
-                # Lấy dữ liệu comments
-                comments_response = youtube_analytics.reports().query(
-                    ids=f'channel=={channel_id}',
-                    startDate=start_date.isoformat(),
-                    endDate=end_date.isoformat(),
-                    metrics='comments',
-                    dimensions='day'
-                ).execute()
-                
-                # Lấy dữ liệu estimatedMinutesWatched (thời gian xem)
-                watch_time_response = youtube_analytics.reports().query(
-                    ids=f'channel=={channel_id}',
-                    startDate=start_date.isoformat(),
-                    endDate=end_date.isoformat(),
-                    metrics='estimatedMinutesWatched',
-                    dimensions='day'
-                ).execute()
-                
-                # Kết hợp dữ liệu
-                analytics_data = []
-                views_data = {row[0]: int(row[1]) for row in views_response.get('rows', [])}
-                subscribers_data = {row[0]: int(row[1]) for row in subscribers_response.get('rows', [])}
-                likes_data = {row[0]: int(row[1]) for row in likes_response.get('rows', [])}
-                comments_data = {row[0]: int(row[1]) for row in comments_response.get('rows', [])}
-                watch_time_data = {row[0]: int(row[1]) for row in watch_time_response.get('rows', [])}
-                
-                current_date = start_date
-                while current_date <= end_date:
-                    date_str = current_date.strftime('%Y-%m-%d')
-                    analytics_data.append({
-                        'date': current_date.strftime('%m/%d'),
-                        'views': views_data.get(date_str, 0),
-                        'subscribers': subscribers_data.get(date_str, 0),
-                        'likes': likes_data.get(date_str, 0),
-                        'comments': comments_data.get(date_str, 0),
-                        'watchTime': watch_time_data.get(date_str, 0),
-                        'shares': 0  # YouTube không cung cấp dữ liệu shares trong Analytics API
-                    })
-                    current_date += timedelta(days=1)
-                
-                logger.info(f"Successfully loaded analytics data for channel {channel_id}")
-                return analytics_data
-                
-            except Exception as e:
-                logger.error(f"YouTube Analytics API error: {e}")
-                # Trả về dữ liệu rỗng thay vì dữ liệu mẫu
-                return self._generate_empty_analytics_data(time_range)
-                
+                subscribers_gained = int(row_dict.get('subscribersGained', 0))
+                subscribers_lost = int(row_dict.get('subscribersLost', 0))
+                net_subscribers = subscribers_gained - subscribers_lost
+                    
+                analytics_data.append({
+                    'date': formatted_date,
+                    'views': int(row_dict.get('views', 0)),
+                    'subscribers': subscribers_gained,  # Subscribers gained
+                    'subscribersLost': subscribers_lost,  # Subscribers lost
+                    'netSubscribers': net_subscribers  # Net change (gained - lost)
+                })
+            return analytics_data
         except Exception as e:
-            logger.error(f"Error getting channel analytics: {e}")
+            logger.error(f"YouTube Analytics API error: {e}")
             return self._generate_empty_analytics_data(time_range)
 
     def _generate_empty_analytics_data(self, time_range: str):
         """
-        Tạo dữ liệu analytics rỗng khi không thể lấy được dữ liệu thực
+        Tạo dữ liệu analytics rỗng khi không thể lấy được dữ liệu thực (views, subscribers gained/lost)
         """
         days = 7 if time_range == '7d' else 30 if time_range == '30d' else 90
         data = []
-        
         for i in range(days - 1, -1, -1):
             date = datetime.now() - timedelta(days=i)
             data.append({
-                'date': date.strftime('%m/%d'),
+                'date': date.strftime('%m/%d'),  # Format MM/DD cho chart
                 'views': 0,
-                'subscribers': 0,
-                'likes': 0,
-                'comments': 0,
-                'watchTime': 0,
-                'shares': 0
+                'subscribers': 0,  # Subscribers gained
+                'subscribersLost': 0,  # Subscribers lost
+                'netSubscribers': 0  # Net change
             })
-        
         return data
 
     def get_my_channel_analytics(self, access_token: str, time_range: str = '7d'):
@@ -720,3 +680,412 @@ class YouTubeService:
                 'total_subscribers': 0,
                 'engagement_rate': 0
             } 
+
+    def get_video_analytics_detailed(self, access_token: str, video_id: str, time_range: str = '7d'):
+        """
+        Lấy dữ liệu analytics chi tiết của video cụ thể
+        """
+        try:
+            credentials = self.create_credentials(access_token)
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
+            
+            # Lấy thống kê cơ bản của video
+            youtube = build('youtube', 'v3', credentials=credentials)
+            response = youtube.videos().list(
+                part='statistics,snippet',
+                id=video_id
+            ).execute()
+            
+            if not response['items']:
+                return None
+            
+            video = response['items'][0]
+            stats = video['statistics']
+            snippet = video['snippet']
+            
+            # Tính toán thời gian
+            end_date = datetime.now().date() - timedelta(days=1)
+            if time_range == '7d':
+                start_date = end_date - timedelta(days=7)
+            elif time_range == '30d':
+                start_date = end_date - timedelta(days=30)
+            else:
+                start_date = end_date - timedelta(days=7)
+            
+            # Lấy analytics chi tiết cho video
+            try:
+                analytics_response = youtube_analytics.reports().query(
+                    ids=f'video=={video_id}',
+                    startDate=start_date.isoformat(),
+                    endDate=end_date.isoformat(),
+                    metrics='views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares,favoritesAdded,favoritesRemoved',
+                    dimensions='day',
+                    sort='day'
+                ).execute()
+                
+                analytics_data = []
+                headers = [h['name'] for h in analytics_response.get('columnHeaders', [])]
+                for row in analytics_response.get('rows', []):
+                    row_dict = dict(zip(headers, row))
+                    analytics_data.append({
+                        'date': row_dict.get('day', ''),
+                        'views': row_dict.get('views', 0),
+                        'likes': row_dict.get('likes', 0),
+                        'comments': row_dict.get('comments', 0),
+                        'shares': row_dict.get('shares', 0),
+                        'watchTime': row_dict.get('estimatedMinutesWatched', 0),
+                        'averageViewDuration': row_dict.get('averageViewDuration', 0),
+                        'favoritesAdded': row_dict.get('favoritesAdded', 0),
+                        'favoritesRemoved': row_dict.get('favoritesRemoved', 0),
+                        'engagementRate': self._calculate_engagement_rate(
+                            row_dict.get('views', 0),
+                            row_dict.get('likes', 0),
+                            row_dict.get('comments', 0),
+                            row_dict.get('shares', 0)
+                        )
+                    })
+            except Exception as e:
+                logger.warning(f"Không thể lấy analytics chi tiết cho video {video_id}: {e}")
+                analytics_data = self._generate_sample_analytics_data(time_range)
+            
+            return {
+                'video_id': video_id,
+                'title': snippet['title'],
+                'description': snippet.get('description', ''),
+                'published_at': snippet['publishedAt'],
+                'thumbnail_url': snippet['thumbnails']['high']['url'],
+                'view_count': int(stats.get('viewCount', 0)),
+                'like_count': int(stats.get('likeCount', 0)),
+                'comment_count': int(stats.get('commentCount', 0)),
+                'duration': snippet.get('duration', ''),
+                'privacy_status': snippet.get('privacyStatus', ''),
+                'analytics_data': analytics_data,
+                'total_engagement': int(stats.get('likeCount', 0)) + int(stats.get('commentCount', 0)),
+                'engagement_rate': self._calculate_engagement_rate(
+                    int(stats.get('viewCount', 0)),
+                    int(stats.get('likeCount', 0)),
+                    int(stats.get('commentCount', 0)),
+                    0  # shares không có trong basic stats
+                )
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting detailed video analytics: {e}")
+            return None
+
+    def get_channel_analytics_summary_enhanced(self, access_token: str, time_range: str = '30d'):
+        """
+        Lấy tổng quan analytics đơn giản của kênh (views và subscribers)
+        """
+        try:
+            channel_id = self.get_my_channel_id(access_token)
+            if not channel_id:
+                logger.warning("Không tìm thấy channel ID cho user")
+                return self._generate_empty_summary()
+            
+            credentials = self.create_credentials(access_token)
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
+
+            # Tính toán ngày bắt đầu và kết thúc
+            end_date = datetime.now().date() - timedelta(days=1)
+            if time_range == '7d':
+                start_date = end_date - timedelta(days=7)
+            elif time_range == '30d':
+                start_date = end_date - timedelta(days=30)
+            elif time_range == '90d':
+                start_date = end_date - timedelta(days=90)
+            else:
+                start_date = end_date - timedelta(days=30)
+
+            try:
+                # Gọi YouTube Analytics API để lấy tổng views, subscribers gained và lost
+                logger.info(f"Querying YouTube Analytics summary for channel {channel_id}, period {start_date} to {end_date}")
+                response = youtube_analytics.reports().query(
+                    ids=f'channel=={channel_id}',
+                    startDate=start_date.isoformat(),
+                    endDate=end_date.isoformat(),
+                    metrics='views,subscribersGained,subscribersLost'
+                ).execute()
+
+                logger.info(f"YouTube Analytics summary response: {response}")
+
+                total_views = 0
+                total_subscribers_gained = 0
+                total_subscribers_lost = 0
+                
+                if response.get('rows'):
+                    # Lấy tổng từ kết quả API
+                    for row in response['rows']:
+                        total_views += row[0] if len(row) > 0 else 0
+                        total_subscribers_gained += row[1] if len(row) > 1 else 0
+                        total_subscribers_lost += row[2] if len(row) > 2 else 0
+
+                logger.info(f"Calculated totals: views={total_views}, gained={total_subscribers_gained}, lost={total_subscribers_lost}")
+
+                net_subscribers = total_subscribers_gained - total_subscribers_lost
+
+                return {
+                    'total_views': total_views,
+                    'total_subscribers': total_subscribers_gained,  # Kept for backward compatibility
+                    'total_subscribers_gained': total_subscribers_gained,
+                    'total_subscribers_lost': total_subscribers_lost,
+                    'net_subscribers': net_subscribers,
+                    'time_range': time_range,
+                    'data_points': len(response.get('rows', [])),
+                    'best_performing_day': None
+                }
+
+            except Exception as api_error:
+                logger.error(f"YouTube Analytics API error: {api_error}")
+                # Fallback to empty data
+                return self._generate_empty_summary()
+            
+        except Exception as e:
+            logger.error(f"Error getting simple channel analytics summary: {e}")
+            return self._generate_empty_summary()
+
+    def _generate_empty_summary(self):
+        """
+        Tạo dữ liệu summary rỗng (views, subscribers gained/lost)
+        """
+        return {
+            'total_views': 0,
+            'total_subscribers': 0,  # Kept for backward compatibility
+            'total_subscribers_gained': 0,
+            'total_subscribers_lost': 0,
+            'net_subscribers': 0,
+            'time_range': '30d',
+            'data_points': 0,
+            'best_performing_day': None
+        }
+
+    def get_channel_analytics_by_geography(self, access_token: str, channel_id: str, time_range: str = '30d'):
+        """
+        Lấy dữ liệu analytics theo địa lý
+        """
+        try:
+            credentials = self.create_credentials(access_token)
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
+            
+            end_date = datetime.now().date() - timedelta(days=1)
+            if time_range == '7d':
+                start_date = end_date - timedelta(days=7)
+            elif time_range == '30d':
+                start_date = end_date - timedelta(days=30)
+            elif time_range == '90d':
+                start_date = end_date - timedelta(days=90)
+            else:
+                start_date = end_date - timedelta(days=30)
+            
+            response = youtube_analytics.reports().query(
+                ids=f'channel=={channel_id}',
+                startDate=start_date.isoformat(),
+                endDate=end_date.isoformat(),
+                metrics='views,estimatedMinutesWatched',
+                dimensions='country',
+                sort='-views'
+            ).execute()
+            
+            geography_data = []
+            headers = [h['name'] for h in response.get('columnHeaders', [])]
+            for row in response.get('rows', []):
+                row_dict = dict(zip(headers, row))
+                geography_data.append({
+                    'country': row_dict.get('country', 'Unknown'),
+                    'views': row_dict.get('views', 0),
+                    'watchTime': row_dict.get('estimatedMinutesWatched', 0)
+                })
+            
+            return geography_data
+            
+        except Exception as e:
+            logger.error(f"Error getting geography analytics: {e}")
+            return []
+
+    def get_channel_analytics_by_device(self, access_token: str, channel_id: str, time_range: str = '30d'):
+        """
+        Lấy dữ liệu analytics theo thiết bị
+        """
+        try:
+            credentials = self.create_credentials(access_token)
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
+            
+            end_date = datetime.now().date() - timedelta(days=1)
+            if time_range == '7d':
+                start_date = end_date - timedelta(days=7)
+            elif time_range == '30d':
+                start_date = end_date - timedelta(days=30)
+            elif time_range == '90d':
+                start_date = end_date - timedelta(days=90)
+            else:
+                start_date = end_date - timedelta(days=30)
+            
+            response = youtube_analytics.reports().query(
+                ids=f'channel=={channel_id}',
+                startDate=start_date.isoformat(),
+                endDate=end_date.isoformat(),
+                metrics='views,estimatedMinutesWatched',
+                dimensions='deviceType',
+                sort='-views'
+            ).execute()
+            
+            device_data = []
+            headers = [h['name'] for h in response.get('columnHeaders', [])]
+            for row in response.get('rows', []):
+                row_dict = dict(zip(headers, row))
+                device_data.append({
+                    'device_type': row_dict.get('deviceType', 'Unknown'),
+                    'views': row_dict.get('views', 0),
+                    'watchTime': row_dict.get('estimatedMinutesWatched', 0)
+                })
+            
+            return device_data
+            
+        except Exception as e:
+            logger.error(f"Error getting device analytics: {e}")
+            return []
+
+    def test_analytics_access(self, access_token: str):
+        """
+        Test YouTube Analytics API access and permissions
+        """
+        try:
+            # First check channel eligibility
+            eligibility = self.check_channel_eligibility(access_token)
+            
+            channel_id = self.get_my_channel_id(access_token)
+            if not channel_id:
+                return {
+                    'success': False,
+                    'error': 'No channel found',
+                    'message': 'User does not have a YouTube channel',
+                    'eligibility': eligibility
+                }
+
+            credentials = self.create_credentials(access_token)
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=credentials)
+
+            # Test with a simple query for the last 7 days
+            end_date = datetime.now().date() - timedelta(days=1)
+            start_date = end_date - timedelta(days=7)
+
+            logger.info(f"Testing Analytics API access for channel {channel_id}")
+            logger.info(f"Channel eligibility: {eligibility}")
+            
+            # Try to query basic metrics
+            response = youtube_analytics.reports().query(
+                ids=f'channel=={channel_id}',
+                startDate=start_date.isoformat(),
+                endDate=end_date.isoformat(),
+                metrics='views'
+            ).execute()
+
+            logger.info(f"Analytics API test response: {response}")
+
+            return {
+                'success': True,
+                'channel_id': channel_id,
+                'data_points': len(response.get('rows', [])),
+                'response': response,
+                'message': 'YouTube Analytics API access is working',
+                'eligibility': eligibility
+            }
+
+        except HttpError as e:
+            logger.error(f"YouTube Analytics API HTTP error: {e}")
+            error_details = e.error_details[0] if e.error_details else {}
+            
+            # Get eligibility info for better error message
+            try:
+                eligibility = self.check_channel_eligibility(access_token)
+            except:
+                eligibility = {'eligible': False, 'reason': 'Unable to check'}
+            
+            return {
+                'success': False,
+                'error': f'HTTP {e.resp.status}: {error_details.get("message", str(e))}',
+                'message': 'YouTube Analytics API access denied. Channel may not meet requirements (1000+ subscribers or monetization enabled).',
+                'eligibility': eligibility
+            }
+        except Exception as e:
+            logger.error(f"YouTube Analytics API test error: {e}")
+            
+            # Get eligibility info for better error message
+            try:
+                eligibility = self.check_channel_eligibility(access_token)
+            except:
+                eligibility = {'eligible': False, 'reason': 'Unable to check'}
+                
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to test YouTube Analytics API access',
+                'eligibility': eligibility
+            }
+
+    def check_channel_eligibility(self, access_token: str):
+        """
+        Check if channel meets YouTube Analytics API requirements
+        """
+        try:
+            channel_stats = self.get_my_channel_stats(access_token)
+            if not channel_stats:
+                return {
+                    'eligible': False,
+                    'reason': 'No channel found',
+                    'requirements_met': [],
+                    'requirements_missing': ['Channel not found']
+                }
+            
+            subscriber_count = channel_stats.get('subscriber_count', 0)
+            video_count = channel_stats.get('video_count', 0)
+            
+            requirements_met = []
+            requirements_missing = []
+            
+            # Check subscriber requirement (1000+)
+            if subscriber_count >= 1000:
+                requirements_met.append(f'✅ Subscribers: {subscriber_count:,} (≥1000)')
+            else:
+                requirements_missing.append(f'❌ Subscribers: {subscriber_count:,} (need 1000+)')
+            
+            # Check video count
+            if video_count > 0:
+                requirements_met.append(f'✅ Videos: {video_count}')
+            else:
+                requirements_missing.append(f'❌ Videos: {video_count} (need some content)')
+            
+            # Check channel age (approximate)
+            from datetime import datetime
+            published_date = datetime.fromisoformat(channel_stats.get('published_at', '').replace('Z', '+00:00'))
+            channel_age_days = (datetime.now(published_date.tzinfo) - published_date).days
+            
+            if channel_age_days >= 30:
+                requirements_met.append(f'✅ Channel age: {channel_age_days} days (≥30)')
+            else:
+                requirements_missing.append(f'❌ Channel age: {channel_age_days} days (need 30+)')
+            
+            eligible = len(requirements_missing) == 0 or subscriber_count >= 1000
+            
+            return {
+                'eligible': eligible,
+                'reason': 'Meets requirements' if eligible else 'Does not meet YouTube Analytics requirements',
+                'requirements_met': requirements_met,
+                'requirements_missing': requirements_missing,
+                'channel_stats': channel_stats,
+                'recommendations': [
+                    'Get 1000+ subscribers to unlock Analytics API',
+                    'Create engaging content regularly',
+                    'Enable monetization when eligible',
+                    'Verify channel with phone number'
+                ] if not eligible else []
+            }
+            
+        except Exception as e:
+            logger.error(f"Error checking channel eligibility: {e}")
+            return {
+                'eligible': False,
+                'reason': f'Error checking eligibility: {str(e)}',
+                'requirements_met': [],
+                'requirements_missing': ['Unable to check requirements']
+            }
