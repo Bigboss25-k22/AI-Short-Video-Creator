@@ -2,7 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.services.google_tts_service import GoogleTTSService
 from app.schemas.video_script import VideoScript
-from app.schemas.voice import VoiceRequest, VoiceResponse, ScriptVoiceRequest, TextToSpeechRequest, TextToSpeechResponse, UpdateVoiceRequest
+from app.schemas.voice import (
+    VoiceRequest,
+    VoiceResponse,
+    ScriptVoiceRequest,
+    TextToSpeechRequest,
+    TextToSpeechResponse,
+    UpdateVoiceRequest,
+)
 from app.crud import video_script as crud
 from app.core.database import get_db
 from app.models.video_script import MediaStatus, ScriptStatus, VoiceAudio
@@ -16,10 +23,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 google_tts_service = GoogleTTSService()
 
+
 class TextToSpeechRequest(BaseModel):
     text: str
     voice_id: str = "en-US-Wavenet-A"  # English female voice
     speed: float = 1.0
+
 
 @router.post("/text-to-speech", response_model=VoiceResponse)
 async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
@@ -31,21 +40,19 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
 
         # Tạo audio base64 từ text
         audio_base64 = google_tts_service.generate_voice(
-            text=request.text,
-            voice_id=request.voice_id,
-            speed=request.speed
+            text=request.text, voice_id=request.voice_id, speed=request.speed
         )
 
         logger.info("Successfully generated base64 audio")
-        
+
         # Tạo file tạm để lưu audio
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
                 # Đảm bảo chuỗi base64 hợp lệ bằng cách thêm padding nếu cần
                 padding = 4 - (len(audio_base64) % 4)
                 if padding != 4:
-                    audio_base64 += '=' * padding
-                
+                    audio_base64 += "=" * padding
+
                 # Giải mã base64 và lưu vào file
                 audio_bytes = base64.b64decode(audio_base64)
                 temp_file.write(audio_bytes)
@@ -54,14 +61,14 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
         except Exception as e:
             logger.error(f"Error saving audio to file: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error saving audio: {str(e)}")
-        
+
         # Trả về base64 audio
         return VoiceResponse(
             audio_base64=audio_base64,
             audio_url=audio_path,
             text=request.text,
             voice_id=request.voice_id,
-            speed=request.speed
+            speed=request.speed,
         )
 
     except Exception as e:
@@ -71,213 +78,250 @@ async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
 
 @router.post("/script-to-speech/{script_id}", response_model=List[TextToSpeechResponse])
 async def script_to_speech(
-    script_id: str,
-    request: TextToSpeechRequest,
-    db: Session = Depends(get_db)
+    script_id: str, request: TextToSpeechRequest, db: Session = Depends(get_db)
 ):
-    """
-    Tạo voice cho tất cả các scene trong một video script
-    """
-    try:
-        logger.info(f"Generating voices for script: {script_id}")
+    from fastapi import APIRouter, HTTPException, Depends
+    from sqlalchemy.orm import Session
+    from app.services.google_tts_service import GoogleTTSService
+    from app.schemas.video_script import VideoScript
+    from app.schemas.voice import (
+        VoiceRequest,
+        VoiceResponse,
+        ScriptVoiceRequest,
+        TextToSpeechRequest,
+        TextToSpeechResponse,
+        UpdateVoiceRequest,
+    )
+    from app.crud import video_script as crud
+    from app.core.database import get_db
+    from app.models.video_script import MediaStatus, ScriptStatus, VoiceAudio
+    from typing import List
+    import logging
+    from pydantic import BaseModel
+    import tempfile
+    import base64
 
-        # Lấy script từ database
-        script = crud.get_script(db, script_id)
-        if not script:
-            raise HTTPException(status_code=404, detail="Script not found")
+    logger = logging.getLogger(__name__)
+    router = APIRouter()
+    google_tts_service = GoogleTTSService()
 
-        # Cập nhật trạng thái script thành processing
-        script.status = ScriptStatus.PROCESSING.value
-        db.commit()
+    class TextToSpeechRequest(BaseModel):
+        text: str
+        voice_id: str = "en-US-Wavenet-A"
+        speed: float = 1.0
 
-        responses = []
-        # Tạo voice cho từng scene
-        for scene in script.scenes:
-            if not scene.voice_over:
-                continue
+    @router.post("/text-to-speech", response_model=VoiceResponse)
+    async def text_to_speech(request: VoiceRequest, db: Session = Depends(get_db)):
+        """Chuyển đổi một đoạn text thành giọng nói và trả về base64 audio"""
+        try:
+            audio_base64 = google_tts_service.generate_voice(
+                text=request.text, voice_id=request.voice_id, speed=request.speed
+            )
 
-            logger.info(f"Generating voice for scene: {scene.id}")
+            try:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".mp3"
+                ) as temp_file:
+                    padding = 4 - (len(audio_base64) % 4)
+                    if padding != 4:
+                        audio_base64 += "=" * padding
 
-            # Cập nhật trạng thái scene thành processing
+                    audio_bytes = base64.b64decode(audio_base64)
+                    temp_file.write(audio_bytes)
+                    audio_path = temp_file.name
+            except Exception as e:
+                logger.error(f"Error saving audio to file: {str(e)}")
+                raise HTTPException(
+                    status_code=500, detail=f"Error saving audio: {str(e)}"
+                )
+
+            return VoiceResponse(
+                audio_base64=audio_base64,
+                audio_url=audio_path,
+                text=request.text,
+                voice_id=request.voice_id,
+                speed=request.speed,
+            )
+        except Exception as e:
+            logger.error(f"Error in text_to_speech: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/script-to-speech/{script_id}", response_model=List[TextToSpeechResponse]
+    )
+    async def script_to_speech(
+        script_id: str, request: TextToSpeechRequest, db: Session = Depends(get_db)
+    ):
+        """Tạo voice cho tất cả các scene trong một video script"""
+        try:
+            script = crud.get_script(db, script_id)
+            if not script:
+                raise HTTPException(status_code=404, detail="Script not found")
+
+            script.status = ScriptStatus.PROCESSING.value
+            db.commit()
+
+            responses = []
+            for scene in script.scenes:
+                if not scene.voice_over:
+                    continue
+
+                scene.voice_status = MediaStatus.PROCESSING.value
+                db.commit()
+
+                try:
+                    audio_base64 = google_tts_service.generate_voice(
+                        text=scene.voice_over,
+                        voice_id=request.voice_id,
+                        speed=request.speed,
+                    )
+
+                    audio_data = {
+                        "audio_base64": audio_base64,
+                        "text_content": scene.voice_over,
+                        "voice_id": request.voice_id,
+                        "speed": request.speed,
+                        "status": MediaStatus.COMPLETED.value,
+                    }
+                    voice_audio = crud.create_voice_audio(
+                        db=db, scene_id=scene.id, audio_data=audio_data
+                    )
+
+                    scene.voice_status = MediaStatus.COMPLETED.value
+                    db.commit()
+
+                    responses.append(
+                        TextToSpeechResponse(
+                            audio_base64=audio_base64,
+                            text=scene.voice_over,
+                            voice_id=request.voice_id,
+                            speed=request.speed,
+                            scene_number=scene.scene_number,
+                        )
+                    )
+                except Exception:
+                    scene.voice_status = MediaStatus.FAILED.value
+                    db.commit()
+                    continue
+
+            all_completed = all(
+                scene.voice_status == MediaStatus.COMPLETED.value
+                for scene in script.scenes
+            )
+            if all_completed:
+                script.status = ScriptStatus.COMPLETED.value
+            else:
+                script.status = ScriptStatus.FAILED.value
+            db.commit()
+
+            return responses
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error in script_to_speech: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.get("/list/{script_id}", response_model=List[TextToSpeechResponse])
+    async def get_script_voices(script_id: str, db: Session = Depends(get_db)):
+        """Lấy tất cả các voice audio của một script"""
+        try:
+            script = crud.get_script(db, script_id)
+            if not script:
+                raise HTTPException(status_code=404, detail="Script not found")
+
+            responses = []
+            for scene in script.scenes:
+                for voice_audio in scene.voice_audios:
+                    responses.append(
+                        TextToSpeechResponse(
+                            audio_base64=voice_audio.audio_base64,
+                            text=voice_audio.text_content,
+                            voice_id=voice_audio.voice_id,
+                            speed=voice_audio.speed,
+                            scene_number=scene.scene_number,
+                        )
+                    )
+
+            return responses
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.put("/update/{scene_id}", response_model=TextToSpeechResponse)
+    async def update_voice(
+        scene_id: str, request: UpdateVoiceRequest, db: Session = Depends(get_db)
+    ):
+        """Cập nhật voice cho một scene cụ thể"""
+        try:
+            scene = crud.get_scene(db, scene_id)
+            if not scene:
+                raise HTTPException(status_code=404, detail="Scene not found")
+
             scene.voice_status = MediaStatus.PROCESSING.value
             db.commit()
 
             try:
-                # Tạo voice cho scene
                 audio_base64 = google_tts_service.generate_voice(
-                    text=scene.voice_over,
+                    text=request.voice_over,
                     voice_id=request.voice_id,
-                    speed=request.speed
+                    speed=request.speed,
                 )
 
-                # Lưu thông tin voice vào database
+                scene.voice_over = request.voice_over
+                db.commit()
+
+                for voice_audio in scene.voice_audios:
+                    db.delete(voice_audio)
+                db.commit()
+
                 audio_data = {
                     "audio_base64": audio_base64,
-                    "text_content": scene.voice_over,
+                    "text_content": request.voice_over,
                     "voice_id": request.voice_id,
                     "speed": request.speed,
-                    "status": MediaStatus.COMPLETED.value
+                    "status": MediaStatus.COMPLETED.value,
                 }
                 voice_audio = crud.create_voice_audio(
-                    db=db,
-                    scene_id=scene.id,
-                    audio_data=audio_data
+                    db=db, scene_id=scene.id, audio_data=audio_data
                 )
 
-                # Cập nhật trạng thái scene thành completed
                 scene.voice_status = MediaStatus.COMPLETED.value
                 db.commit()
 
-                responses.append(TextToSpeechResponse(
+                return TextToSpeechResponse(
                     audio_base64=audio_base64,
-                    text=scene.voice_over,
+                    text=request.voice_over,
                     voice_id=request.voice_id,
                     speed=request.speed,
-                    scene_number=scene.scene_number
-                ))
+                    scene_number=scene.scene_number,
+                )
             except Exception as e:
                 scene.voice_status = MediaStatus.FAILED.value
                 db.commit()
-                continue
-
-        # Kiểm tra xem tất cả scenes đã hoàn thành chưa
-        all_completed = all(scene.voice_status == MediaStatus.COMPLETED.value for scene in script.scenes)
-        if all_completed:
-            script.status = ScriptStatus.COMPLETED.value
-        else:
-            script.status = ScriptStatus.FAILED.value
-        db.commit()
-
-        return responses
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error in script_to_speech: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/list/{script_id}", response_model=List[TextToSpeechResponse])
-async def get_script_voices(script_id: str, db: Session = Depends(get_db)):
-    """
-    Lấy tất cả các voice audio của một script
-    """
-    try:
-        # Lấy script từ database
-        script = crud.get_script(db, script_id)
-        if not script:
-            raise HTTPException(status_code=404, detail="Script not found")
-
-        responses = []
-        # Lấy tất cả voice audio của các scene trong script
-        for scene in script.scenes:
-            for voice_audio in scene.voice_audios:
-                responses.append(TextToSpeechResponse(
-                    audio_base64=voice_audio.audio_base64,
-                    text=voice_audio.text_content,
-                    voice_id=voice_audio.voice_id,
-                    speed=voice_audio.speed,
-                    scene_number=scene.scene_number
-                ))
-
-        return responses
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/update/{scene_id}", response_model=TextToSpeechResponse)
-async def update_voice(
-    scene_id: str,
-    request: UpdateVoiceRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Cập nhật voice cho một scene cụ thể
-    """
-    try:
-        # Lấy scene từ database
-        scene = crud.get_scene(db, scene_id)
-        if not scene:
-            raise HTTPException(status_code=404, detail="Scene not found")
-
-        # Cập nhật trạng thái scene thành processing
-        scene.voice_status = MediaStatus.PROCESSING.value
-        db.commit()
-
-        try:
-            # Tạo voice mới cho scene
-            audio_base64 = google_tts_service.generate_voice(
-                text=request.voice_over,
-                voice_id=request.voice_id,
-                speed=request.speed
-            )
-
-            # Cập nhật voice_over trong scene
-            scene.voice_over = request.voice_over
-            db.commit()
-
-            # Xóa các voice audio cũ của scene
-            for voice_audio in scene.voice_audios:
-                db.delete(voice_audio)
-            db.commit()
-
-            # Lưu thông tin voice mới vào database
-            audio_data = {
-                "audio_base64": audio_base64,
-                "text_content": request.voice_over,
-                "voice_id": request.voice_id,
-                "speed": request.speed,
-                "status": MediaStatus.COMPLETED.value
-            }
-            voice_audio = crud.create_voice_audio(
-                db=db,
-                scene_id=scene.id,
-                audio_data=audio_data
-            )
-
-            # Cập nhật trạng thái scene thành completed
-            scene.voice_status = MediaStatus.COMPLETED.value
-            db.commit()
-
-            return TextToSpeechResponse(
-                audio_base64=audio_base64,
-                text=request.voice_over,
-                voice_id=request.voice_id,
-                speed=request.speed,
-                scene_number=scene.scene_number
-            )
+                raise HTTPException(status_code=500, detail=str(e))
 
         except Exception as e:
-            scene.voice_status = MediaStatus.FAILED.value
-            db.commit()
+            db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
 
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    @router.delete("/voice-audio/{audio_id}")
+    async def delete_voice_audio(audio_id: str, db: Session = Depends(get_db)):
+        """Xóa một voice audio của scene"""
+        try:
+            voice_audio = db.query(VoiceAudio).filter(VoiceAudio.id == audio_id).first()
+            if not voice_audio:
+                raise HTTPException(status_code=404, detail="Voice audio not found")
 
-@router.delete("/voice-audio/{audio_id}")
-async def delete_voice_audio(audio_id: str, db: Session = Depends(get_db)):
-    """
-    Xóa một voice audio của scene
-    """
-    try:
-        # Lấy VoiceAudio từ database
-        voice_audio = db.query(VoiceAudio).filter(VoiceAudio.id == audio_id).first()
-        if not voice_audio:
-            raise HTTPException(status_code=404, detail="Voice audio not found")
+            scene = crud.get_scene(db, voice_audio.scene_id)
+            if not scene:
+                raise HTTPException(status_code=404, detail="Scene not found")
 
-        # Lấy scene tương ứng
-        scene = crud.get_scene(db, voice_audio.scene_id)
-        if not scene:
-            raise HTTPException(status_code=404, detail="Scene not found")
+            db.delete(voice_audio)
 
-        # Xóa voice audio
-        db.delete(voice_audio)
-        
-        # Cập nhật trạng thái scene nếu không còn voice audio nào
-        if not scene.voice_audios:
-            scene.voice_status = MediaStatus.PENDING.value
-        
-        db.commit()
+            if not scene.voice_audios:
+                scene.voice_status = MediaStatus.PENDING.value
 
-        return {"message": "Voice audio deleted successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e)) 
+            db.commit()
+
+            return {"message": "Voice audio deleted successfully"}
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))

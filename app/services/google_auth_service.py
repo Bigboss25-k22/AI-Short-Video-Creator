@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 class GoogleAuthService:
     def __init__(self):
         self.client_id = settings.GOOGLE_CLIENT_ID
@@ -18,13 +19,12 @@ class GoogleAuthService:
         self.redirect_uri = settings.GOOGLE_REDIRECT_URI
         self.token_url = "https://oauth2.googleapis.com/token"
         self.userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
-        
-        # Scopes cần thiết cho ứng dụng
+
         self.scopes = [
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/userinfo.profile",
             "https://www.googleapis.com/auth/youtube.upload",
-            "https://www.googleapis.com/auth/youtube"
+            "https://www.googleapis.com/auth/youtube",
         ]
 
     def get_auth_url(self) -> str:
@@ -51,8 +51,8 @@ class GoogleAuthService:
                         "client_secret": self.client_secret,
                         "code": code,
                         "redirect_uri": self.redirect_uri,
-                        "grant_type": "authorization_code"
-                    }
+                        "grant_type": "authorization_code",
+                    },
                 )
                 response.raise_for_status()
                 token_data = response.json()
@@ -60,19 +60,19 @@ class GoogleAuthService:
                     "access_token": token_data["access_token"],
                     "refresh_token": token_data.get("refresh_token"),
                     "expires_in": token_data.get("expires_in", 3600),
-                    "token_type": token_data.get("token_type", "Bearer")
+                    "token_type": token_data.get("token_type", "Bearer"),
                 }
-              
+
         except httpx.HTTPStatusError as e:
             error_detail = e.response.json() if e.response.content else str(e)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get access token from Google: {error_detail}"
+                detail=f"Failed to get access token from Google: {error_detail}",
             )
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error getting access token: {str(e)}"
+                detail=f"Error getting access token: {str(e)}",
             )
 
     async def get_user_info(self, access_token: str) -> GoogleUserInfo:
@@ -81,7 +81,7 @@ class GoogleAuthService:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     self.userinfo_url,
-                    headers={"Authorization": f"Bearer {access_token}"}
+                    headers={"Authorization": f"Bearer {access_token}"},
                 )
                 response.raise_for_status()
                 return GoogleUserInfo(**response.json())
@@ -89,63 +89,60 @@ class GoogleAuthService:
             error_detail = e.response.json() if e.response.content else str(e)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get user info from Google: {error_detail}"
+                detail=f"Failed to get user info from Google: {error_detail}",
             )
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error getting user info: {str(e)}"
+                detail=f"Error getting user info: {str(e)}",
             )
 
     def get_or_create_user(self, db: Session, user_info: GoogleUserInfo) -> User:
         """Lấy hoặc tạo user từ thông tin Google"""
         try:
             user = db.query(User).filter(User.email == user_info.email).first()
-            
+
             if not user:
-                # Tạo user mới nếu chưa tồn tại
                 user = User(
                     email=user_info.email,
-                    username=user_info.email.split('@')[0],  # Sử dụng phần trước @ của email làm username
+                    username=user_info.email.split("@")[0],
                     full_name=user_info.name,
-                    hashed_password=pwd_context.hash("google_oauth2"),  # Mật khẩu mặc định
+                    hashed_password=pwd_context.hash("google_oauth2"),
                     role="user",
                     avatar_url=user_info.picture,
                     is_google_user=True,
-                    is_active=True  # Set is_active cho user mới
+                    is_active=True,
                 )
                 db.add(user)
                 db.commit()
                 db.refresh(user)
-            
+
             return user
         except Exception as e:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error creating/getting user: {str(e)}"
+                detail=f"Error creating/getting user: {str(e)}",
             )
 
     def create_tokens(self, db: Session, user: User) -> dict:
         """Tạo access token và refresh token"""
         try:
-            access_token = create_access_token({
-                "sub": user.username,
-                "role": user.role
-            })
+            access_token = create_access_token(
+                {"sub": user.username, "role": user.role}
+            )
             refresh_token = create_refresh_token({"sub": user.username})
             expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-            
-            # Lưu refresh token
+
             save_refresh_token(db, refresh_token, user.id, expires_at)
-            
+
             return {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
-                "token_type": "bearer"
+                "token_type": "bearer",
             }
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Error creating tokens: {str(e)}"
-            ) 
+                detail=f"Error creating tokens: {str(e)}",
+            )

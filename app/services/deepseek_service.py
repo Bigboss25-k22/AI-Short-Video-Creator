@@ -12,24 +12,28 @@ from urllib3.util.retry import Retry
 import datetime
 import enum
 
-# Cấu hình logging với UTF-8
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+
 
 class DeepSeekService:
     def __init__(self):
         settings = get_settings()
         self.api_key = settings.DEEPSEEK_API_KEY
-        
+
         # Kiểm tra API key có hợp lệ không
-        if not self.api_key or self.api_key == "" or self.api_key == "your-deepseek-api-key-here":
-            logger.warning("DEEPSEEK_API_KEY not set or invalid - Using mock data for testing")
+        if (
+            not self.api_key
+            or self.api_key == ""
+            or self.api_key == "your-deepseek-api-key-here"
+        ):
+            logger.warning(
+                "DEEPSEEK_API_KEY not set or invalid - Using mock data for testing"
+            )
             self.use_mock = True
             self.api_url = None
             self.headers = None
@@ -42,21 +46,21 @@ class DeepSeekService:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost:8000",
-                "X-Title": "Architecture Design API"
+                "X-Title": "Architecture Design API",
             }
             # Cấu hình session với retry mechanism
             self.session = requests.Session()
             retries = Retry(
-                total=3,
-                backoff_factor=1,
-                status_forcelist=[500, 502, 503, 504]
+                total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504]
             )
-            self.session.mount('https://', HTTPAdapter(max_retries=retries))
-            self.session.mount('http://', HTTPAdapter(max_retries=retries))
-        
+            self.session.mount("https://", HTTPAdapter(max_retries=retries))
+            self.session.mount("http://", HTTPAdapter(max_retries=retries))
+
         logger.info("DeepSeekService initialized")
 
-    def _get_mock_script(self, topic: str, target_audience: str, duration: int) -> VideoScript:
+    def _get_mock_script(
+        self, topic: str, target_audience: str, duration: int
+    ) -> VideoScript:
         """Tạo dữ liệu mẫu cho testing"""
         return VideoScript(
             title=f"Kịch bản video về {topic}",
@@ -70,7 +74,7 @@ class DeepSeekService:
                     duration=20,
                     visual_elements="A high school classroom with wooden desks arranged in rows. Natural light streams through large windows on the left side. The walls are painted light blue with motivational posters. A whiteboard at the front displays exam schedules. Students in school uniforms sit at their desks, some looking nervous, others confident. The atmosphere is tense but hopeful.",
                     background_music="Nhạc nền nhẹ nhàng, tạo cảm giác lo lắng nhưng hy vọng",
-                    voice_over="Kỳ thi trung học phổ thông - một bước ngoặt quan trọng trong cuộc đời mỗi học sinh"
+                    voice_over="Kỳ thi trung học phổ thông - một bước ngoặt quan trọng trong cuộc đời mỗi học sinh",
                 ),
                 Scene(
                     scene_number=2,
@@ -78,7 +82,7 @@ class DeepSeekService:
                     duration=30,
                     visual_elements="A student's bedroom with study materials scattered on a wooden desk. A laptop screen shows exam results with disappointing scores. The room has warm lighting from a desk lamp. The student sits on the bed, looking thoughtful but not defeated. Books and notebooks are stacked neatly on shelves. A motivational quote is pinned to the wall.",
                     background_music="Nhạc nền sâu lắng, phản ánh cảm xúc suy tư",
-                    voice_over="Nhưng điều quan trọng không phải là điểm số, mà là những bài học quý giá từ thất bại"
+                    voice_over="Nhưng điều quan trọng không phải là điểm số, mà là những bài học quý giá từ thất bại",
                 ),
                 Scene(
                     scene_number=3,
@@ -86,12 +90,14 @@ class DeepSeekService:
                     duration=10,
                     visual_elements="A bright, modern study room with a student sitting at a clean desk, surrounded by organized study materials. Sunlight pours through a large window, creating a warm, optimistic atmosphere. The student is smiling and looking confident. A calendar on the wall shows future exam dates. Success is clearly within reach.",
                     background_music="Nhạc nền lạc quan, truyền cảm hứng",
-                    voice_over="Hãy nhớ rằng, mỗi thất bại là một bước đệm để thành công"
-                )
-            ]
+                    voice_over="Hãy nhớ rằng, mỗi thất bại là một bước đệm để thành công",
+                ),
+            ],
         )
 
-    def generate_video_script(self, topic: str, target_audience: str, duration: int) -> VideoScript:
+    def generate_video_script(
+        self, topic: str, target_audience: str, duration: int
+    ) -> VideoScript:
         try:
             logger.info(f"Generating video script for topic: {topic}")
 
@@ -123,31 +129,32 @@ class DeepSeekService:
             content_payload = {
                 "model": "deepseek/deepseek-chat:free",
                 "messages": [
-                    {"role": "system", "content": "Bạn là một chuyên gia viết kịch bản video chuyên nghiệp."},
-                    {"role": "user", "content": content_prompt}
+                    {
+                        "role": "system",
+                        "content": "Bạn là một chuyên gia viết kịch bản video chuyên nghiệp.",
+                    },
+                    {"role": "user", "content": content_prompt},
                 ],
                 "temperature": 0.7,
-                "max_tokens": 2000
+                "max_tokens": 2000,
             }
-            content_response = self.session.post(self.api_url, headers=self.headers, json=content_payload, timeout=60)
+            content_response = self.session.post(
+                self.api_url, headers=self.headers, json=content_payload, timeout=60
+            )
 
-            # Kiểm tra response có rỗng không
             if not content_response.text or content_response.text.strip() == "":
-                logger.error("OpenRouter returned empty response - likely API key issue")
+                logger.error(
+                    "OpenRouter returned empty response - likely API key issue"
+                )
                 logger.error("Falling back to mock data")
                 return self._get_mock_script(topic, target_audience, duration)
-            
-            # Kiểm tra response có rỗng không
-            if not content_response.text or content_response.text.strip() == "":
-                logger.error("OpenRouter returned empty response - likely API key issue")
-                logger.error("Falling back to mock data")
-                return self._get_mock_script(topic, target_audience, duration)
-            
             if content_response.status_code != 200:
                 logger.error(f"Content generation failed: {content_response.text}")
-                raise ValueError(f"Failed to generate script content: {content_response.text}")
+                raise ValueError(
+                    f"Failed to generate script content: {content_response.text}"
+                )
 
-            script_content = content_response.json()['choices'][0]['message']['content']
+            script_content = content_response.json()["choices"][0]["message"]["content"]
             logger.info("Successfully generated overall script content")
 
             # Bước 2: Tách nội dung thành các cảnh
@@ -205,53 +212,60 @@ class DeepSeekService:
             scenes_payload = {
                 "model": "deepseek/deepseek-chat:free",
                 "messages": [
-                    {"role": "system", "content": "Bạn là một chuyên gia phân cảnh video và thiết kế hình ảnh, có khả năng tạo ra những mô tả chi tiết và sinh động về bối cảnh, ánh sáng, và nhân vật."},
-                    {"role": "user", "content": scenes_prompt}
+                    {
+                        "role": "system",
+                        "content": "Bạn là một chuyên gia phân cảnh video và thiết kế hình ảnh, có khả năng tạo ra những mô tả chi tiết và sinh động về bối cảnh, ánh sáng, và nhân vật.",
+                    },
+                    {"role": "user", "content": scenes_prompt},
                 ],
                 "temperature": 0.7,
-                "max_tokens": 2000
+                "max_tokens": 2000,
             }
 
             logger.info("Splitting content into scenes...")
-            scenes_response = self.session.post(self.api_url, headers=self.headers, json=scenes_payload, timeout=60)
+            scenes_response = self.session.post(
+                self.api_url, headers=self.headers, json=scenes_payload, timeout=60
+            )
 
             if scenes_response.status_code != 200:
                 logger.error(f"Scene generation failed: {scenes_response.text}")
                 raise ValueError(f"Failed to generate scenes: {scenes_response.text}")
 
-            scenes_data = scenes_response.json()['choices'][0]['message']['content']
+            scenes_data = scenes_response.json()["choices"][0]["message"]["content"]
             logger.info("Successfully generated scenes")
 
             # Parse response và tạo VideoScript object
             try:
-                json_start = scenes_data.find('{')
-                json_end = scenes_data.rfind('}') + 1
+                json_start = scenes_data.find("{")
+                json_end = scenes_data.rfind("}") + 1
                 if json_start >= 0 and json_end > json_start:
                     json_str = scenes_data[json_start:json_end]
                     data = json.loads(json_str)
 
                     # Tạo danh sách Scene
                     scenes = []
-                    for scene_data in data.get('scenes', []):
+                    for scene_data in data.get("scenes", []):
                         scene = Scene(
-                            scene_number=scene_data['scene_number'],
-                            description=scene_data['description'],
-                            duration=scene_data['duration'],
-                            visual_elements=scene_data['visual_elements'],
-                            background_music=scene_data.get('background_music'),
-                            voice_over=scene_data.get('voice_over')
+                            scene_number=scene_data["scene_number"],
+                            description=scene_data["description"],
+                            duration=scene_data["duration"],
+                            visual_elements=scene_data["visual_elements"],
+                            background_music=scene_data.get("background_music"),
+                            voice_over=scene_data.get("voice_over"),
                         )
                         scenes.append(scene)
 
                     # Tạo VideoScript object
                     script = VideoScript(
-                        title=data['title'],
-                        description=data['description'],
-                        target_audience=data['target_audience'],
-                        total_duration=data['total_duration'],
-                        scenes=scenes
+                        title=data["title"],
+                        description=data["description"],
+                        target_audience=data["target_audience"],
+                        total_duration=data["total_duration"],
+                        scenes=scenes,
                     )
-                    logger.info(f"Successfully generated video script with {len(scenes)} scenes")
+                    logger.info(
+                        f"Successfully generated video script with {len(scenes)} scenes"
+                    )
                     return script
                 else:
                     logger.error("No JSON found in response")
@@ -303,57 +317,72 @@ class DeepSeekService:
             payload = {
                 "model": "deepseek/deepseek-chat:free",
                 "messages": [
-                    {"role": "system", "content": "Bạn là một chuyên gia chỉnh sửa kịch bản video."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "Bạn là một chuyên gia chỉnh sửa kịch bản video.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.7,
-                "max_tokens": 2000
+                "max_tokens": 2000,
             }
 
             logger.debug(f"Sending enhancement request to OpenRouter API")
-            response = self.session.post(self.api_url, headers=self.headers, json=payload, timeout=60)
+            response = self.session.post(
+                self.api_url, headers=self.headers, json=payload, timeout=60
+            )
 
             if response.status_code == 401:
                 logger.error("Unauthorized: Invalid API key")
-                raise ValueError("Invalid OpenRouter API key. Please check your API key in .env file")
+                raise ValueError(
+                    "Invalid OpenRouter API key. Please check your API key in .env file"
+                )
             elif response.status_code != 200:
-                logger.error(f"API request failed with status code: {response.status_code}")
+                logger.error(
+                    f"API request failed with status code: {response.status_code}"
+                )
                 logger.error(f"Response content: {response.text}")
                 raise ValueError(f"OpenRouter API request failed: {response.text}")
 
             result = response.json()
-            logger.info("Successfully received enhancement response from OpenRouter API")
+            logger.info(
+                "Successfully received enhancement response from OpenRouter API"
+            )
 
             # Parse response và cập nhật VideoScript object
-            script_data = result['choices'][0]['message']['content']
+            script_data = result["choices"][0]["message"]["content"]
             try:
-                json_start = script_data.find('{')
-                json_end = script_data.rfind('}') + 1
+                json_start = script_data.find("{")
+                json_end = script_data.rfind("}") + 1
                 if json_start >= 0 and json_end > json_start:
                     json_str = script_data[json_start:json_end]
                     data = json.loads(json_str)
 
                     # Cập nhật script với dữ liệu mới
-                    script.title = data.get('title', script.title)
-                    script.description = data.get('description', script.description)
-                    script.total_duration = data.get('total_duration', script.total_duration)
+                    script.title = data.get("title", script.title)
+                    script.description = data.get("description", script.description)
+                    script.total_duration = data.get(
+                        "total_duration", script.total_duration
+                    )
 
                     # Cập nhật scenes
-                    if 'scenes' in data:
+                    if "scenes" in data:
                         scenes = []
-                        for scene_data in data['scenes']:
+                        for scene_data in data["scenes"]:
                             scene = Scene(
-                                scene_number=scene_data['scene_number'],
-                                description=scene_data['description'],
-                                duration=scene_data['duration'],
-                                visual_elements=scene_data['visual_elements'],
-                                background_music=scene_data.get('background_music'),
-                                voice_over=scene_data.get('voice_over')
+                                scene_number=scene_data["scene_number"],
+                                description=scene_data["description"],
+                                duration=scene_data["duration"],
+                                visual_elements=scene_data["visual_elements"],
+                                background_music=scene_data.get("background_music"),
+                                voice_over=scene_data.get("voice_over"),
                             )
                             scenes.append(scene)
                         script.scenes = scenes
 
-                    logger.info(f"Successfully enhanced video script with {len(script.scenes)} scenes")
+                    logger.info(
+                        f"Successfully enhanced video script with {len(script.scenes)} scenes"
+                    )
                     return script
                 else:
                     logger.error("No JSON found in enhancement response")
